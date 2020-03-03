@@ -1,0 +1,8 @@
+inotify
+flask
+
+# For use by tasks
+docker-compose
+
+# For use in testing
+mypy

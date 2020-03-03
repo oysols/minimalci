@@ -1,0 +1,75 @@
+<!doctype html><html lang=en>
+<head>
+    <title>{{ title }} CI</title>
+</head>
+<body>
+    <style>
+        body{
+            background-color: #222;
+            margin: 0px;
+            font-family: monospace, monospace;
+            color: #fafafa;
+        }
+        a{
+            color: #fafafa;
+        }
+        div#status{
+            position: fixed;
+            width: 100%;
+            background-color: grey;
+        }
+        td{
+            padding-right: 10px;
+            padding-left: 10px;
+            white-space: nowrap;
+        }
+        td.running{
+            background-color: dodgerblue;
+        }
+        td.waiting_for_task{
+            background-color: orange;
+        }
+        td.waiting_for_host{
+            background-color: orange;
+        }
+        td.success{
+            background-color: green;
+        }
+        td.failed{
+            background-color: red;
+        }
+        td.skipped{
+            background-color: grey;
+        }
+    </style>
+
+    <center>
+    <table style="width:100%;max-width:1000px;">
+        <tr>
+            <td colspan=4>
+                <h1>{{ title }}</h1>
+            </td>
+        </tr>
+        {% for build in builds %}
+        <tr>
+            <td>
+                {{ build.timestamp }}
+            </td>
+            <td class="{{ build.status }}">
+                {{ build.status }}
+            </td>
+            <td>
+                <a href="{{ build.link }}">
+                    {{ build.sha }}
+                </a>
+            </td>
+            <td style="width:100%">
+                {{ build.branch }}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    </center>
+
+</body>
+</html>

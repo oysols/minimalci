@@ -1,0 +1,164 @@
+<!doctype html><html lang=en>
+<head>
+    <title>{{ title }} CI</title>
+</head>
+<body>
+    <style>
+        body{
+            background-color: #222;
+            margin: 0px;
+            font-family: monospace, monospace;
+            color: #fafafa;
+        }
+        a{
+            color: #fafafa;
+        }
+        div#status{
+            position: fixed;
+            width: 100%;
+            background-color: grey;
+        }
+        td{
+            padding-right: 10px;
+            padding-left: 10px;
+        }
+        td.running{
+            background-color: dodgerblue;
+        }
+        td.waiting_for_task{
+            background-color: orange;
+        }
+        td.waiting_for_host{
+            background-color: orange;
+        }
+        td.success{
+            background-color: green;
+        }
+        td.failed{
+            background-color: red;
+        }
+        td.skipped{
+            background-color: grey;
+        }
+    </style>
+
+    <style id="dynamic-style"></style>
+    <script>
+        function filterDivs(name){
+            style = document.getElementById("dynamic-style");
+            style.innerHTML = ".line{display:none}"
+            style.innerHTML += "." + name + "{display:block}"
+        }
+        function showDivs(){
+            style = document.getElementById("dynamic-style");
+            style.innerHTML = ".line{display:block}"
+        }
+        function triggerFilter() {
+            hash = window.location.hash.replace("#", "")
+            if (hash) {
+                filterDivs(hash);
+            }
+            else {
+                showDivs();
+            }
+        }
+        window.onhashchange = triggerFilter;
+        triggerFilter();
+    </script>
+
+    <div id="status">Javascript required for dynamic updates. Refresh manually.</div>
+    <script>var status = document.getElementById("status").innerHTML = "";</script>
+
+    <!-- CSS is still bad. HTML comments are worse... -->
+    <div id="status_spacer">&nbsp;</div>
+    <center>
+    <table style="width:100%;max-width:1000px">
+        <tr>
+            <td colspan=4>
+                <h1>{{ title }}</h1>
+                <h3>{{ sub_title }}</h3>
+            </td>
+        </tr>
+        {% for task in tasks %}
+        <tr>
+            <td id="taskstatus_{{ task.name }}" class="{{ task.status }}">
+                {{ task.status }}
+            </td>
+            <td width=100%>
+                <a href="#{{ task.name }}">
+                    {{ task.name }}
+                </a>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    <br>
+    </center>
+
+    <div id="events">
+    {% autoescape false %}
+    {% for line in lines %}<div style="white-space: pre-wrap;" class="line {{ line[0] }}">{{ line[1] }}</div>{% endfor %}
+    {% endautoescape %}
+    </div>
+
+    <script>
+        window.onload = function() {
+            var source = new EventSource("/stream/{{ sha }}?id={{ line_number }}");
+            source.addEventListener(
+                'line',
+                function(e) {
+                    isScrolledBottom = (window.innerHeight + window.pageYOffset) + 100 >= document.body.offsetHeight;
+
+                    data = JSON.parse(e.data);
+                    class_name = data[0];
+                    line = data[1];
+
+                    var div = document.createElement("div");
+                    div.style.whiteSpace = "pre-wrap";
+                    div.className = "line " + class_name;
+                    div.innerHTML = line;
+
+                    document.getElementById("events").appendChild(div);
+
+                    if (isScrolledBottom){
+                        window.scrollTo(0, document.body.scrollHeight);
+                    }
+                }
+            );
+            source.addEventListener(
+                'eof',
+                function (e){
+                    var status = document.getElementById("status");
+                    status.innerHTML = "End of file";
+                    status.style.backgroundColor = "blue";
+                    source.close()
+                }
+            );
+            source.addEventListener(
+                'state',
+                function (e){
+                    data = JSON.parse(e.data);
+                    for (var task of data){
+                        var el = document.getElementById("taskstatus_" + task.name);
+                        el.className = task.status;
+                        el.innerHTML = task.status;
+                    };
+                }
+            );
+
+            // StatusBar
+            source.onopen = function() {
+                var status = document.getElementById("status");
+                status.innerHTML = "Connected";
+                status.style.backgroundColor = "green";
+            }
+            source.onerror = function() {
+                var status = document.getElementById("status");
+                status.innerHTML = "Connection error...";
+                status.style.backgroundColor = "red";
+            }
+
+        }
+    </script>
+</body>
+</html>

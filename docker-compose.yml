@@ -1,0 +1,22 @@
+version: "3"
+services:
+    minimalci:
+        build: .
+        volumes:
+            - /srv/minimalci/repo:/server/repo
+            - /srv/minimalci/logs:/server/logs
+            - /srv/minimalci/secrets:/server/secrets:ro
+            - /srv/minimalci/ssh:/root/.ssh:ro
+            - /var/run/docker.sock:/var/run/docker.sock
+        ports:
+            - 80:8000
+        environment:
+            - REPO_NAME=minimalci
+            - REPO_URL=git@github.com:oysols/minimalci.git
+            - BASE_URL=http://35.227.107.72/
+            # Optional
+            - TASKS_FILE=tasks.py
+            - DOCKER_REGISTRY=""
+            - DOCKER_USER=""
+            - DOCKER_PASS=""
+        restart: always

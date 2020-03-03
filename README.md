@@ -54,6 +54,7 @@ ssh-keyscan -t rsa github.com >> /srv/minimalci/ssh/known_hosts
 ## Minimalci
 - Fix print prefix for running executors locally
 - Run taskrunner in docker
+- Log jsonlines to stdout?
 - Setup consistent executor queues without relying on local semaphore
 - Test and verify remote python execution
 - Only optionally write log/state

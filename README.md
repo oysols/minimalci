@@ -1,6 +1,6 @@
 # MinimalCI
 
-Fast and simple continuous integration wiht Python as DSL.
+Fast and simple continuous integration with Python as DSL.
 
 - Server and frontend `server/`
 

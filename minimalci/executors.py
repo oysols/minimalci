@@ -350,13 +350,13 @@ class LocalWithForwardedDockerSock(Local):
         command_str = " ".join(command)
         print(f"{self.print_prefix}+ {command_str}")
         self.process = subprocess.Popen(command, stdout=PIPE, stderr=PIPE, stdin=PIPE, bufsize=1)
-        for raw_line in iter(self.process.stdout.readline, b""):
+        for raw_line in iter(self.process.stdout.readline, b""):  # type: ignore
             # Loop forever
             line = raw_line.decode().rstrip()
             if line == "ready":
                 break
         else:
-            for raw_line in iter(self.process.stderr.readline, b""):
+            for raw_line in iter(self.process.stderr.readline, b""):  # type: ignore
                 line = raw_line.decode().rstrip()
                 print(line)
             raise Exception("Forwarding failed")

@@ -1,10 +1,14 @@
 from pathlib import Path
 import os
 
+import oauth
+
+
 # Required
 REPO_URL = os.environ.get("REPO_URL", ".")
 REPO_NAME = os.environ.get("REPO_NAME", "testing")
 BASE_URL = os.environ.get("BASE_URL", "http://localhost")
+
 
 # Optional
 TASKS_FILE = Path(os.environ.get("TASKS_FILE", "tasks.py"))
@@ -14,7 +18,20 @@ if DOCKER_REGISTRY:  # Docker registry auto login at import time
 DOCKER_USER = ""
 DOCKER_PASS = ""
 
-# Static
+OAUTH_ENABLED = False
+if os.environ.get("GITHUB_CLIENT_ID"):
+    OAUTH_ENABLED = True
+    OAUTH_SERVER = oauth.OauthServer(
+        "https://github.com/login/oauth/authorize",
+        "https://github.com/login/oauth/access_token",
+        "https://api.github.com/user",
+        os.environ["GITHUB_CLIENT_ID"],
+        os.environ["GITHUB_CLIENT_SECRET"],
+    )
+    AUTHORIZED_USERS = os.environ["GITHUB_AUTHORIZED_USERS"].split(",")
+
+
+# Advanced
 REPO_PATH = Path("./repo")
 LOGS_PATH = Path("./logs")
 SECRETS_PATH = Path("./secrets")

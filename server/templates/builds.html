@@ -50,6 +50,13 @@
                 <h1>{{ title }}</h1>
             </td>
         </tr>
+        {% if show_logout %}
+        <tr>
+            <td colspan=4>
+                <h3><a href="/logout">Logout</a></h3>
+            </td>
+        </tr>
+        {% endif %}
         {% for build in builds %}
         <tr>
             <td>

@@ -75,8 +75,8 @@
     <table style="width:100%;max-width:1000px">
         <tr>
             <td colspan=4>
-                <h1>{{ title }}</h1>
-                <h3>{{ sub_title }}</h3>
+                <h1><a href="/">{{ title }}</a></h1>
+                <h3>{{ branch }} - <a href="#">{{ sha }}</a></h3>
             </td>
         </tr>
         {% for task in tasks %}

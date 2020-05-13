@@ -6,18 +6,89 @@ import queue
 import json
 import concurrent.futures
 import datetime
-from typing import Tuple, Iterator, Dict, List, Any
+from typing import Tuple, Iterator, Dict, List, Any, Callable
 import string
+import secrets
+import functools
 
-from flask import Flask, request, escape, Response, render_template
+from flask import Flask, request, escape, Response, render_template, session
+import flask
 
 from minimalci.executors import run_command, NonZeroExit
 import ansi2html
 import config
+import oauth
 
 app = Flask(__name__)
+app.secret_key = secrets.token_hex(64)
 
 TRIGGER = threading.Event()
+
+
+# Handle authentication / authorization
+
+
+@app.route("/login")
+def login():  # type: ignore
+    if not config.OAUTH_ENABLED:
+        return "Disabled", 404
+    url, session_state = oauth.begin_oauth(config.OAUTH_SERVER)
+    session["oauth_state"] = session_state
+    return flask.redirect(url, code=302)
+
+
+@app.route("/callback")
+def login_callback():  # type: ignore
+    if not config.OAUTH_ENABLED:
+        return "Disabled", 404
+    access_token = oauth.finish_oauth(
+        config.OAUTH_SERVER,
+        str(request.args.get("code")),
+        str(request.args.get("state")),
+        str(session.get("oauth_state")),
+    )
+    username = oauth.get_username(config.OAUTH_SERVER, access_token)
+    if username in config.AUTHORIZED_USERS:
+        session["authorized_username"] = username
+        return flask.redirect(session.pop("redirected_from", "/"), code=302)
+    return "User not authorized", 403
+
+
+@app.route("/logout")
+def logout():  # type: ignore
+    if not config.OAUTH_ENABLED:
+        return "Disabled", 404
+    session.clear()
+    return "Logged out", 200
+
+
+def authorized(redirect: bool = False) -> Callable[..., Any]:
+    def authorized_wrapper(f: Callable[..., Any]) -> Callable[..., Any]:
+        if not config.OAUTH_ENABLED:
+            return f
+
+        @functools.wraps(f)
+        def decorator(*args: Any, **kwargs: Any) -> Any:
+            if session.get("authorized_username"):
+                return f(*args, **kwargs)
+            if redirect:
+                session["redirected_from"] = request.path
+                return f"""<a href="/login">Click here to login with Github</a>"""
+            return "Unauthenticated", 401
+        return decorator
+    return authorized_wrapper
+
+
+# Utils
+
+
+class ClientError(Exception):
+    status_code = 400
+
+
+@app.errorhandler(ClientError)
+def client_error(error: ClientError) -> Tuple[str, int]:
+    return escape(str(error)), error.status_code
 
 
 def json_file_to_queue(path: Path, q: "queue.Queue[str]", kill_signal: threading.Event) -> None:
@@ -91,15 +162,6 @@ def sse_generator(from_line: int, base_path: Path) -> Iterator[str]:
             f2.result()
 
 
-class ClientError(Exception):
-    status_code = 400
-
-
-@app.errorhandler(ClientError)
-def client_error(error: ClientError) -> Tuple[str, int]:
-    return escape(str(error)), error.status_code
-
-
 def verify_sha(sha: str) -> None:
     if len(sha) != 40:
         raise ClientError("Invalid sha")
@@ -107,14 +169,6 @@ def verify_sha(sha: str) -> None:
     for c in sha:
         if c not in legal_chars:
             raise ClientError("Invalid sha")
-
-
-@app.route("/stream/<sha>")
-def stream(sha: str) -> Tuple[Response, int]:
-    verify_sha(sha)
-    base_path = Path(os.path.join("./logs", sha))
-    from_line = int(request.headers.get("last-event-id", request.args.get("id", 1)))
-    return Response(sse_generator(from_line, base_path), mimetype="text/event-stream"), 200
 
 
 def get_logs() -> List[Dict[str, Any]]:
@@ -127,9 +181,22 @@ def get_logs() -> List[Dict[str, Any]]:
     return logs
 
 
+# Endpoints
+
+
+@app.route("/stream/<sha>")
+@authorized()
+def stream(sha: str) -> Tuple[Response, int]:
+    verify_sha(sha)
+    base_path = Path(os.path.join("./logs", sha))
+    from_line = int(request.headers.get("last-event-id", request.args.get("id", 1)))
+    return Response(sse_generator(from_line, base_path), mimetype="text/event-stream"), 200
+
+
 @app.route("/logs/")
 @app.route("/logs")
 @app.route("/")
+@authorized(redirect=True)
 def repo_index() -> Tuple[str, int]:
     logs = sorted(get_logs(), key=lambda data: data.get("meta", {}).get("started", 0), reverse=True)
     title = config.REPO_NAME
@@ -153,7 +220,7 @@ def repo_index() -> Tuple[str, int]:
             "status": status,
             "sha": meta.get("commit", "")[:8] or data.get("commit", "error")[:8],
         })
-    return render_template("builds.html", builds=builds, title=title), 200
+    return render_template("builds.html", builds=builds, title=title, show_logout=config.OAUTH_ENABLED), 200
 
 
 @app.route("/trigger", methods=["GET", "POST"])
@@ -164,6 +231,7 @@ def trigger() -> Tuple["str", int]:
 
 @app.route("/logs/<sha>")
 @app.route("/logs/<sha>/")
+@authorized(redirect=True)
 def logs(sha: str) -> Tuple[str, int]:
     verify_sha(sha)
     base_path = Path(os.path.join("./logs", sha))
@@ -184,9 +252,10 @@ def logs(sha: str) -> Tuple[str, int]:
     title = config.REPO_NAME
     # TODO: remove all meta
     meta = data.get("meta", {})
-    sub_title = "{} - {}".format(meta.get("branch") or data.get("branch"), meta.get("commit") or data.get("commit"))
+    branch = meta.get("branch") or data.get("branch")
+    # TODO: assert sha == meta["commit"]
     # lines are not autoescaped, must be manually escaped
-    return render_template("log.html", sha=sha, tasks=tasks, lines=lines, line_number=line_number, title=title, sub_title=sub_title), 200
+    return render_template("log.html", sha=sha, tasks=tasks, lines=lines, line_number=line_number, title=title, branch=branch), 200
 
 
 if __name__ == "__main__":

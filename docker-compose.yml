@@ -16,7 +16,11 @@ services:
             - BASE_URL=http://35.227.107.72/
             # Optional
             - TASKS_FILE=tasks.py
-            - DOCKER_REGISTRY=""
-            - DOCKER_USER=""
-            - DOCKER_PASS=""
+            - DOCKER_REGISTRY
+            - DOCKER_USER
+            - DOCKER_PASS
+            - GITHUB_CLIENT_ID
+            - GITHUB_CLIENT_SECRET
+            - GITHUB_AUTHORIZED_USERS  # user1,user2,user3
+
         restart: always

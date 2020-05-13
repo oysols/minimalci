@@ -47,7 +47,9 @@ class ErrorHandler(Task):
 
 if __name__ == "__main__":
     import __main__  # type: ignore
-    from minimalci import taskrunner
+    from minimalci import taskrunner, tasks
 
-    tasks = taskrunner.get_tasks_from_module(__main__)
-    taskrunner.run_tasks(tasks)
+    all_tasks = taskrunner.get_tasks_from_module(__main__)
+    state = tasks.State()
+    state.commit = "localtest"
+    taskrunner.run_tasks(all_tasks, state)

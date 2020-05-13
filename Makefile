@@ -7,6 +7,9 @@ test:
 	python3 tests/test_executors.py
 	python3 tests/test_taskrunner.py
 
+tasks:
+	python3 tasks.py
+
 check:
 	mypy minimalci --strict
 	mypy server --strict

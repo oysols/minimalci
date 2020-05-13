@@ -1,4 +1,3 @@
-inotify
 flask
 
 # For use by tasks

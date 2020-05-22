@@ -51,34 +51,42 @@ def safe_del_tmp_file_atexit(full_path: Path) -> None:
     atexit.register(safe_del_tmp_file, full_path)
 
 
-def bytes_from_stash(tar_path: Path, specific_file: str) -> bytes:
-    command = [
-        "tar",
-        "--extract",
-        "--gzip",
-        "--file",
-        quote(str(tar_path)),
-        quote(specific_file),
-        "--to-stdout",
-    ]
-    return run_command(command)
+class Stash:
+    def __init__(self, path: Optional[Path] = None) -> None:
+        if path is None:
+            self.path = self._empty_tar()
+        else:
+            self.path = path
 
+    def __str__(self) -> str:
+        return str(self.path)
 
-def text_from_stash(tar_path: Path, specific_file: str) -> str:
-    return bytes_from_stash(tar_path, specific_file).decode().strip()
+    @staticmethod
+    def _empty_tar() -> Path:
+        tmp_path = random_tmp_file_path()
+        command = [
+            "tar",
+            "--create",
+            "--gzip",
+            "--file", str(tmp_path),
+            "--files-from", "/dev/null",
+        ]
+        run_command(command)
+        return tmp_path
 
+    def read_bytes(self, specific_file: str) -> bytes:
+        command = [
+            "tar",
+            "--extract",
+            "--gzip",
+            "--file", quote(str(self.path)),
+            "--to-stdout",
+            quote(specific_file),
+        ]
+        return run_command(command)
 
-def empty_stash() -> Path:
-    tmp_path = random_tmp_file_path()
-    command = [
-        "tar",
-        "--create",
-        "--gzip",
-        "--file", str(tmp_path),
-        "--files-from", "/dev/null",
-    ]
-    run_command(command)
-    return tmp_path
+    def read_text(self, specific_file: str) -> str:
+        return self.read_bytes(specific_file).decode().strip()
 
 
 # Raw shells
@@ -182,11 +190,11 @@ class Executor:
     def sh(self, command: str) -> bytes:
         raise NotImplementedError
 
-    def _tar_to_tmp(self, path: str) -> Path:
+    def _tar_to_tmp(self, path_glob: str) -> Path:
         stash_path = random_tmp_file_path()
         self.sh("tar --gzip --create --file {} {}".format(
             quote(str(stash_path)),
-            path,  # TODO: unsafe. fix? Not escaped to deal with globbing/pathname expansion
+            path_glob,  # TODO: unsafe. fix? Not escaped to deal with globbing/pathname expansion
         ))
         return stash_path
 
@@ -220,13 +228,13 @@ class Local(Executor):
     def sh(self, command: str, **kwargs: Any) -> bytes:
         return local_shell(command, path=self.path, **kwargs)
 
-    def stash(self, path: str) -> Path:
-        stash_path = self._tar_to_tmp(path)
+    def stash(self, path_glob: str) -> Stash:
+        stash_path = self._tar_to_tmp(path_glob)
         safe_del_tmp_file_atexit(stash_path)
-        return stash_path
+        return Stash(stash_path)
 
-    def unstash(self, local_path: Path, specific_file: str = "") -> None:
-        self._untar_to_cwd(local_path, specific_file)
+    def unstash(self, stash: Stash, specific_file: str = "") -> None:
+        self._untar_to_cwd(stash.path, specific_file)
 
 
 class Ssh(Executor):
@@ -237,8 +245,8 @@ class Ssh(Executor):
     def sh(self, command: str, **kwargs: Any) -> bytes:
         return ssh_shell(self.host, command, path=self.path, **kwargs)
 
-    def stash(self, path: str) -> Path:
-        remote_stash_path = self._tar_to_tmp(path)
+    def stash(self, path_glob: str) -> Stash:
+        remote_stash_path = self._tar_to_tmp(path_glob)
         try:
             local_stash_path = random_tmp_file_path()
             command = "scp {} {}".format(
@@ -249,12 +257,12 @@ class Ssh(Executor):
         finally:
             self._safe_del_tmp_file(remote_stash_path)
         safe_del_tmp_file_atexit(local_stash_path)
-        return local_stash_path
+        return Stash(local_stash_path)
 
-    def unstash(self, local_path: Path, specific_file: str = "") -> None:
+    def unstash(self, stash: Stash, specific_file: str = "") -> None:
         tmp_path = random_tmp_file_path()
         command = "scp {} {}".format(
-            quote(str(local_path)),
+            quote(str(stash)),
             quote("{}:{}".format(self.host, tmp_path)),
         )
         local_shell(command)
@@ -303,8 +311,8 @@ class LocalContainer(Executor):
         full_command = ["docker", "exec", "--user", "root", self.container_name, "/bin/bash", "-ce", command]
         return run_command(full_command, print_prefix=self.print_prefix)
 
-    def stash(self, path: str) -> Path:
-        container_stash_path = self._tar_to_tmp(path)
+    def stash(self, path_glob: str) -> Stash:
+        container_stash_path = self._tar_to_tmp(path_glob)
         try:
             local_stash_path = random_tmp_file_path()
             command = "docker cp {}:{} {}".format(
@@ -316,12 +324,12 @@ class LocalContainer(Executor):
         finally:
             self._safe_del_tmp_file(container_stash_path)
         safe_del_tmp_file_atexit(local_stash_path)
-        return local_stash_path
+        return Stash(local_stash_path)
 
-    def unstash(self, local_stash_path: Path, specific_file: str = "") -> None:
+    def unstash(self, stash: Stash, specific_file: str = "") -> None:
         container_tmp_path = random_tmp_file_path()
         command = "docker cp {} {}:{}".format(
-            quote(str(local_stash_path)),
+            quote(str(stash)),
             quote(self.container_name),
             quote(str(container_tmp_path)),
         )

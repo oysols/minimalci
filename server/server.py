@@ -95,11 +95,11 @@ def build_all_branches() -> None:
         logging.info(f"Extracting branch to workdir: {workdir}")
         checkout_repo(config.REPO_PATH, workdir, branch, sha)
 
-        source = stash_source(config.REPO_PATH, sha, workdir)
+        source = executors.Stash(stash_source(config.REPO_PATH, sha, workdir))
         if list(config.SECRETS_PATH.iterdir()):
             secrets = executors.Local(path=config.SECRETS_PATH).stash("*")
         else:
-            secrets = executors.empty_stash()
+            secrets = executors.Stash()
         state = tasks.State(source, secrets)
 
         state.commit = sha
@@ -121,9 +121,9 @@ def build_all_branches() -> None:
 
         # Clean up
         if state.secrets:
-            executors.safe_del_tmp_file(state.secrets)
+            executors.safe_del_tmp_file(state.secrets.path)
         if state.source:
-            executors.safe_del_tmp_file(state.source)
+            executors.safe_del_tmp_file(state.source.path)
         shutil.rmtree(workdir)
 
 

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from minimalci.executors import LocalContainer, Local, text_from_stash, empty_stash
+from minimalci.executors import LocalContainer, Local, Stash
 from minimalci.tasks import Task, Status
 
 
@@ -13,7 +13,7 @@ class Setup(Task):
             global image_name
             image_name = f"test:{self.state.commit}"
             exe.sh(f"docker build . -t {image_name}")
-            print(text_from_stash(self.state.source, "Dockerfile"))
+            print(self.state.source.read_text("Dockerfile"))
             exe.unstash(self.state.secrets)
             #exe.unstash(self.state.secrets, "supersecret.txt")
 
@@ -39,9 +39,8 @@ class ErrorHandler(Task):
     run_after = [Test, Lint]
     run_always = True
     def run(self) -> None:
-        with Local() as exe:
-            for task in self.state.tasks:
-                print(f"{task.name} {task.status.name}")
+        for task in self.state.tasks:
+            print(f"{task.name} {task.status.name}")
 
 
 if __name__ == "__main__":
@@ -51,6 +50,6 @@ if __name__ == "__main__":
     all_tasks = taskrunner.get_tasks_from_module(__main__)
     with Local() as exe:
         source = exe.stash("*")
-    state = tasks.State(source, empty_stash())
+    state = tasks.State(source, Stash())
     state.commit = "localtest"
     taskrunner.run_tasks(all_tasks, state)

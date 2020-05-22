@@ -9,7 +9,7 @@ import datetime
 import enum
 import os
 
-from .executors import NonZeroExit
+from .executors import NonZeroExit, Stash
 
 
 class Status(enum.Enum):
@@ -27,7 +27,7 @@ class Skipped(Exception):
 
 
 class State():
-    def __init__(self, source: Path, secrets: Path) -> None:
+    def __init__(self, source: Stash, secrets: Stash) -> None:
         self.source = source
         self.secrets = secrets
         self.tasks: List[Task] = []

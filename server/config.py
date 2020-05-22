@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import subprocess
 
 import oauth
 
@@ -12,11 +13,17 @@ BASE_URL = os.environ.get("BASE_URL", "http://localhost")
 
 # Optional
 TASKS_FILE = Path(os.environ.get("TASKS_FILE", "tasks.py"))
-DOCKER_REGISTRY = os.environ.get("DOCKER_REGISTRY", "")
+DOCKER_REGISTRY = os.environ.get("DOCKER_REGISTRY")
 if DOCKER_REGISTRY:  # Docker registry auto login at import time
-    pass
-DOCKER_USER = ""
-DOCKER_PASS = ""
+    subprocess.check_call(
+        [
+            "docker",
+            "login",
+            DOCKER_REGISTRY,
+            "-u", os.environ.get("DOCKER_USER", ""),
+            "-p", os.environ.get("DOCKER_PASS", ""),
+        ]
+    )
 
 OAUTH_ENABLED = False
 if os.environ.get("GITHUB_CLIENT_ID"):

@@ -27,9 +27,9 @@ class Skipped(Exception):
 
 
 class State():
-    def __init__(self) -> None:
-        self.source: Optional[Path] = None
-        self.secrets: Optional[Path] = None
+    def __init__(self, source: Path, secrets: Path) -> None:
+        self.source = source
+        self.secrets = secrets
         self.tasks: List[Task] = []
         self.logdir: Path = Path()
 

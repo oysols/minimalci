@@ -2,7 +2,7 @@ import sys
 sys.path.append(".")
 
 from minimalci.tasks import Task, State
-
+from minimalci.executors import empty_stash
 
 order = []
 
@@ -48,7 +48,8 @@ class H(Task):
 if __name__ == "__main__":
     import __main__  # type: ignore
     from minimalci import taskrunner, tasks
-    taskrunner.run_tasks(taskrunner.get_tasks_from_module(__main__))
+    state = State(empty_stash(), empty_stash())
+    taskrunner.run_tasks(taskrunner.get_tasks_from_module(__main__), state)
     print(order)
     truth = ['A', 'B', 'C', '-', '-', '-', '-', 'H']
     print(truth)

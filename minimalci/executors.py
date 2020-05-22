@@ -51,6 +51,36 @@ def safe_del_tmp_file_atexit(full_path: Path) -> None:
     atexit.register(safe_del_tmp_file, full_path)
 
 
+def bytes_from_stash(tar_path: Path, specific_file: str) -> bytes:
+    command = [
+        "tar",
+        "--extract",
+        "--gzip",
+        "--file",
+        quote(str(tar_path)),
+        quote(specific_file),
+        "--to-stdout",
+    ]
+    return run_command(command)
+
+
+def text_from_stash(tar_path: Path, specific_file: str) -> str:
+    return bytes_from_stash(tar_path, specific_file).decode().strip()
+
+
+def empty_stash() -> Path:
+    tmp_path = random_tmp_file_path()
+    command = [
+        "tar",
+        "--create",
+        "--gzip",
+        "--file", str(tmp_path),
+        "--files-from", "/dev/null",
+    ]
+    run_command(command)
+    return tmp_path
+
+
 # Raw shells
 
 

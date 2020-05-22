@@ -40,7 +40,7 @@ def get_tasks_from_module(obj: object) -> List[Type[Task]]:
     return sorted_tasks
 
 
-def run_tasks(task_classes: List[Type[Task]], state: State = State()) -> None:
+def run_tasks(task_classes: List[Type[Task]], state: State) -> None:
     monkey_patch_print(state.logdir)
 
     for task_class in task_classes:
@@ -61,7 +61,7 @@ def run_tasks(task_classes: List[Type[Task]], state: State = State()) -> None:
         thread.join()
 
 
-def run_all_tasks_in_file(filename: Path, state: State = State()) -> None:
+def run_all_tasks_in_file(filename: Path, state: State) -> None:
     monkey_patch_print(state.logdir)
 
     state.meta["started"] = time.time()
@@ -94,16 +94,3 @@ def run_all_tasks_in_file(filename: Path, state: State = State()) -> None:
         raise
     state.meta["finished"] = time.time()
     state.save()
-
-
-if __name__ == "__main__":
-    state = State()
-    state.commit = ""
-    state.branch = ""
-    state.source = Path()
-    state.logdir = Path()  # config.LOGS_PATH
-    state.secrets = Path()  # config.SECRETS_PATH
-    state.repo_name = ""  # config.REPO_NAME
-    state.log_url = ""  # urljoin(config.BASE_URL, f"/logs/{sha}")
-
-    run_all_tasks_in_file(Path("tasks.py"), state)

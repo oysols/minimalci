@@ -42,12 +42,13 @@ TODO
 
 ## Server setup
 
-- SSH setup
-
-```
-ssh-keygen -P '' -f /srv/minimalci/ssh/id_rsa
-ssh-keyscan -t rsa github.com >> /srv/minimalci/ssh/known_hosts
-```
+- Modify docker-compose.yml according to requirements
+- Optional: Add github oauth client id and secret
+- Optional: Add docker registry username and password
+- Start server with `docker-compose up -d`
+- Authorize auto-generated ssh public key (found in `docker-compose logs` and on disk)
+- Optional: Register web-hook `/trigger` for triggering repository scan
+- Access web interface and check logs to verify setup
 
 # TODO
 

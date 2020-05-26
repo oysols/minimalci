@@ -5,8 +5,8 @@ services:
         volumes:
             - /srv/minimalci/repo:/server/repo
             - /srv/minimalci/logs:/server/logs
-            - /srv/minimalci/secrets:/server/secrets:ro
-            - /srv/minimalci/ssh:/root/.ssh:ro
+            - /srv/minimalci/secrets:/server/secrets
+            - /srv/minimalci/ssh:/root/.ssh
             - /var/run/docker.sock:/var/run/docker.sock
         ports:
             - 80:8000

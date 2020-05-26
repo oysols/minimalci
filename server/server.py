@@ -129,6 +129,14 @@ def build_all_branches() -> None:
 
 def init() -> None:
     config.LOGS_PATH.mkdir(exist_ok=True)
+    config.SECRETS_PATH.mkdir(exist_ok=True)
+    ssh_path = Path("~/.ssh").expanduser()
+    ssh_path.mkdir(exist_ok=True)
+    if len(list(ssh_path.iterdir())) == 0:
+        subprocess.check_call(["ssh-keygen", "-f", str(ssh_path / "id_rsa"), "-P", ""])
+        pub_key = (ssh_path / "id_rsa.pub").read_text()
+        logging.info(f"\n\n{pub_key}\n")
+        (ssh_path / "config").write_text("Host *\n  StrictHostKeyChecking=accept-new")
     if not (config.REPO_PATH / ".git").is_dir():
         subprocess.check_call(["git", "clone", config.REPO_URL, config.REPO_PATH])
 

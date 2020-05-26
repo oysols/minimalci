@@ -387,7 +387,7 @@ class LocalWithForwardedDockerSock(Local):
         ]
         command_str = " ".join(command)
         print(f"{self.print_prefix}+ {command_str}")
-        self.process = subprocess.Popen(command, stdout=PIPE, stderr=PIPE, stdin=PIPE, bufsize=1)
+        self.process = subprocess.Popen(command, stdout=PIPE, stderr=PIPE, stdin=PIPE)
         for raw_line in iter(self.process.stdout.readline, b""):  # type: ignore
             # Loop forever
             line = raw_line.decode().rstrip()

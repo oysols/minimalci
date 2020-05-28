@@ -83,7 +83,7 @@ class Stash:
             "--to-stdout",
             quote(specific_file),
         ]
-        return run_command(command)
+        return subprocess.check_output(command)
 
     def read_text(self, specific_file: str) -> str:
         return self.read_bytes(specific_file).decode().strip()

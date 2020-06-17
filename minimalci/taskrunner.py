@@ -16,13 +16,14 @@ def print_with_thread_prefix(global_log_write_lock: threading.Lock, logdir: Path
     # Swallows kwargs to keep signature compatible with builtins.print
     # TODO: use json-based logging instead
     prefix = threading.current_thread().name.split("-")[0]
-    timestamp = datetime.datetime.utcnow().isoformat()
-    print_string = " ".join([str(arg) for arg in args])
-    line = f"{timestamp} {prefix:<20} {print_string}\n"
-    sys.stdout.write(line)
-    with global_log_write_lock:
-        with open(logdir / "output.log", "a") as f:
-            f.write(line)
+    raw_print_string = " ".join([str(arg) for arg in args])
+    for print_string in raw_print_string.splitlines():
+        timestamp = datetime.datetime.utcnow().isoformat()
+        line = f"{timestamp} {prefix:<20} {print_string}\n"
+        sys.stdout.write(line)
+        with global_log_write_lock:
+            with open(logdir / "output.log", "a") as f:
+                f.write(line)
 
 
 def monkey_patch_print(logdir: Path) -> None:

@@ -199,10 +199,10 @@ class Executor:
         return stash_path
 
     def _untar_to_cwd(self, tar_path: Path, specific_file: str) -> None:
-        self.sh("tar --extract --gzip --file {} {}".format(
-            quote(str(tar_path)),
-            quote(specific_file),
-        ))
+        command = "tar --extract --gzip --file {}".format(quote(str(tar_path)))
+        if specific_file:
+            command += " {}".format(quote(specific_file))
+        self.sh(command)
 
     def _safe_del_tmp_file(self, path: Path) -> None:
         assert_path_in_tmp(path)

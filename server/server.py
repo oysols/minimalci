@@ -23,7 +23,7 @@ import config
 
 def git_fetch(repo_path: Path) -> None:
     logging.info("Fetching updates from remote")
-    executors.run_command(["git", "-C", str(repo_path), "fetch", "-v"], print_prefix="git  ")
+    executors.run_command(["git", "-C", str(repo_path), "fetch", "--prune", "--prune-tags", "-v"], print_prefix="git  ")
 
 
 def get_all_branches(repo_path: Path) -> List[Tuple[str, str]]:

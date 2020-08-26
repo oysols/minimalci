@@ -1,6 +1,6 @@
 from typing import Optional, Any, Type, List, TypeVar
 import queue
-from types import TracebackType, FunctionType
+from types import TracebackType, FunctionType, FrameType
 import threading
 import subprocess
 from subprocess import PIPE, DEVNULL
@@ -13,7 +13,11 @@ import secrets
 from pathlib import Path
 
 
-T = TypeVar("T")
+global_kill_signal = threading.Event()
+
+
+def global_kill_signal_handler(signum: int, frame: FrameType) -> None:
+    global_kill_signal.set()
 
 
 class NonZeroExit(Exception):
@@ -154,13 +158,23 @@ def run_command(
     kill_signal: Optional[threading.Event] = None,
     **kwargs: Any
 ) -> bytes:
+    signal = kill_signal or global_kill_signal
+    if signal.is_set():
+        raise NonZeroExit(f"Process killed", b"", b"")
     with subprocess.Popen(command, stdout=PIPE, stderr=PIPE, stdin=DEVNULL, **kwargs) as process:
         # Set thread name to match parent thread for taskrunner output aggregation
-        with concurrent.futures.ThreadPoolExecutor(3, thread_name_prefix=threading.current_thread().name + "-") as e:
+        thread_name_prefix = threading.current_thread().name + "-"
+        # Start process reaper thread
+        threading.Thread(
+            target=kill_thread,
+            args=(process, signal),
+            daemon=True,
+            name=thread_name_prefix + secrets.token_hex(4)
+        ).start()
+        # Wait for stream handlers to complete to guarantee all output is processed before process is killed
+        with concurrent.futures.ThreadPoolExecutor(2, thread_name_prefix=thread_name_prefix) as e:
             stdout = e.submit(stream_handler, process.stdout, print_prefix, output_queue)
             stderr = e.submit(stream_handler, process.stderr, print_prefix)
-            if kill_signal:
-                reaper = e.submit(kill_thread, process, kill_signal)
     if process.returncode != 0:
         raise NonZeroExit(f"Exit code: {process.returncode}", stdout.result(), stderr.result())
     return stdout.result()
@@ -169,32 +183,33 @@ def run_command(
 # Executors
 
 
+T = TypeVar("T", bound="Executor")
+
+
 class Executor:
     def __init__(self, path: Optional[Path] = None, temp_path: bool = False):
         if path and temp_path:
             raise Exception("Incompatible arguments")
         self.temp_path = temp_path
-        self.path = Path()
-        if path:
-            self.path = path
-        elif temp_path:
-            self.path = self._mk_temp_dir()
+        self.path = path or Path()
 
     def __enter__(self: T) -> T:
+        if self.temp_path:
+            self.path = self._mk_temp_dir()
         return self
 
     def __exit__(self, exc_type: Optional[Type[BaseException]], exc_value: Optional[BaseException], traceback: Optional[TracebackType]) -> None:
         if self.temp_path:
             self._safe_del_tmp_dir(self.path)
 
-    def sh(self, command: str) -> bytes:
+    def sh(self, command: str, **kwargs: Any) -> bytes:
         raise NotImplementedError
 
-    def _tar_to_tmp(self, path_glob: str) -> Path:
+    def _tar_to_tmp(self, path_str: str) -> Path:
         stash_path = random_tmp_file_path()
         self.sh("tar --gzip --create --file {} {}".format(
             quote(str(stash_path)),
-            path_glob,  # TODO: unsafe. fix? Not escaped to deal with globbing/pathname expansion
+            quote(path_str),
         ))
         return stash_path
 
@@ -206,21 +221,24 @@ class Executor:
 
     def _safe_del_tmp_file(self, path: Path) -> None:
         assert_path_in_tmp(path)
-        self.sh("rm {}".format(
-            quote(str(path)),
-        ))
+        self.sh(
+            "rm {}".format(quote(str(path))),
+            kill_signal=threading.Event(),  # Override global kill signal
+        )
 
     def _safe_del_tmp_dir(self, path: Path) -> None:
         assert_path_in_tmp(path)
-        self.sh("rm -r {}".format(
-            quote(str(path)),
-        ))
+        self.sh(
+            "rm -r {}".format(quote(str(path))),
+            kill_signal=threading.Event(),  # Override global kill signal
+        )
 
     def _mk_temp_dir(self) -> Path:
         temp_dir = random_tmp_file_path()
-        self.sh("mkdir {}".format(
-            quote(str(temp_dir)),
-        ))
+        self.sh(
+            "mkdir {}".format(quote(str(temp_dir))),
+            kill_signal=threading.Event(),  # Override global kill signal
+        )
         return temp_dir
 
 
@@ -228,8 +246,8 @@ class Local(Executor):
     def sh(self, command: str, **kwargs: Any) -> bytes:
         return local_shell(command, path=self.path, **kwargs)
 
-    def stash(self, path_glob: str) -> Stash:
-        stash_path = self._tar_to_tmp(path_glob)
+    def stash(self, path: str) -> Stash:
+        stash_path = self._tar_to_tmp(path)
         safe_del_tmp_file_atexit(stash_path)
         return Stash(stash_path)
 
@@ -279,27 +297,34 @@ class LocalContainer(Executor):
         self.mount_docker = mount_docker
         self.container_name = secrets.token_hex(16)
         self.print_prefix = "" # TODO: get_print_prefix(self.image)
+        super().__init__(**kwargs)
+
+    def __enter__(self) -> "LocalContainer":
         command = "docker run --rm --name {} {} -t -d {} /bin/bash -c cat".format(
             quote(self.container_name),
             "-v /var/run/docker.sock:/var/run/docker.sock" if self.mount_docker else "",
             quote(self.image),
         )
-        local_shell(command)
-        super().__init__(**kwargs)
-
-    def __enter__(self) -> "LocalContainer":
+        local_shell(
+            command,
+            kill_signal=threading.Event(),  # Override global kill signal
+        )
+        super().__enter__()
         return self
 
     def __exit__(self, exc_type: Optional[Type[BaseException]], exc_value: Optional[BaseException], traceback: Optional[TracebackType]) -> None:
         super().__exit__(exc_type, exc_value, traceback)
-        local_shell("docker rm -f {}".format(quote(self.container_name)))
+        local_shell(
+            "docker rm -f {}".format(quote(self.container_name)),
+            kill_signal=threading.Event(),  # Override global kill signal
+        )
 
-    def sh(self, command: str) -> bytes:
+    def sh(self, command: str, **kwargs: Any) -> bytes:
         for line in command.splitlines():
             print(f"+ {line}")
         workdir = [] if self.path == Path() else ["--workdir", quote(str(self.path))]
         full_command = ["docker", "exec"] + workdir + ["-t", self.container_name, "/bin/bash", "-ce", command]
-        return run_command(full_command, print_prefix=self.print_prefix)
+        return run_command(full_command, print_prefix=self.print_prefix, **kwargs)
 
     def chown_file_to_docker_user(self, container_path: Path) -> bytes:
         docker_user = self.sh("whoami").decode().strip()
@@ -398,6 +423,7 @@ class LocalWithForwardedDockerSock(Local):
                 line = raw_line.decode().rstrip()
                 print(line)
             raise Exception("Forwarding failed")
+        super().__enter__()
         return self
 
     def __exit__(self, exc_type: Optional[Type[BaseException]], exc_value: Optional[BaseException], traceback: Optional[TracebackType]) -> None:

@@ -72,6 +72,7 @@ def run_tasks(task_classes: List[Type[Task]], state: State) -> None:
         for thread in threads:
             thread.join()
 
+        state.finished = time.time()
         state.save()
 
 
@@ -93,3 +94,29 @@ def run_all_tasks_in_file(filename: Path, state: State) -> None:
         tasks = [FailedImport]
     # Run all tasks
     run_tasks(tasks, state)
+
+
+if __name__ == "__main__":
+    # python3 -m minimalci.taskrunner <args>
+    parser = argparse.ArgumentParser(description='Run tasks')
+    parser.add_argument('--commit', help='Commit sha', default="local")
+    parser.add_argument('--branch', help='Branch name', default="")
+    parser.add_argument('--identifier', help="Unique identifier for run", default="")
+    parser.add_argument('--repo-name', help='Name of repository', default="")
+    parser.add_argument('--log-url', help='Commit sha', default="")
+    parser.add_argument('--logdir', help='Directory for state and output logs', default=".")
+    parser.add_argument('--file', help='Tasks file', default="tasks.py")
+    args = parser.parse_args()
+
+    state = State()
+    state.commit = args.commit
+    state.branch = args.branch
+    state.repo_name = args.repo_name
+    state.log_url = args.log_url
+    state.logdir = Path(args.logdir)
+    state.identifier = args.identifier
+
+    # Kill executor processes and cleanly exit on SIGTERM
+    signal.signal(signal.SIGTERM, global_kill_signal_handler)
+
+    run_all_tasks_in_file(args.file, state)

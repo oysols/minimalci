@@ -1,15 +1,14 @@
-import concurrent.futures
 import threading
-from typing import Dict, List, Optional, Type, Any
+from typing import List, Optional, Type, Any, Union, TypeVar, Callable
+import dataclasses
 import traceback
 import time
 import json
 from pathlib import Path
-import datetime
 import enum
-import os
+from dataclasses import dataclass
 
-from .executors import NonZeroExit, Stash
+from minimalci.executors import NonZeroExit, Stash
 
 
 class Status(enum.Enum):
@@ -22,23 +21,139 @@ class Status(enum.Enum):
     skipped = 6
 
 
+def get_overall_status(status_list: List[Status]) -> Status:
+    if all(status == Status.skipped for status in status_list):
+        return Status.skipped
+    if all(status in [Status.success, Status.skipped] for status in status_list):
+        return Status.success
+    if any(status == Status.running for status in status_list):
+        return Status.running
+    if any(status == Status.waiting_for_task for status in status_list):
+        return Status.waiting_for_task
+    return Status.failed
+
+
 class Skipped(Exception):
     pass
 
 
-class State():
-    def __init__(self, source: Stash, secrets: Stash) -> None:
-        self.source = source
-        self.secrets = secrets
-        self.tasks: List[Task] = []
-        self.logdir: Path = Path()
+@dataclass
+class TaskSnapshot:
+    name: str
+    status: str
+    run_after: List[str]
+    run_always: bool
+    started: Optional[float]
+    finished: Optional[float]
 
-        # Meta
-        self.meta: Dict[str, Any] = {}
-        self.commit: str = ""
-        self.branch: str = ""
-        self.repo_name: str = ""
-        self.log_url: str = ""
+
+@dataclass
+class StateSnapshot:
+    commit: str
+    branch: str
+    repo_name: str
+    log_url: str
+    identifier: str
+    status: str
+    started: float
+    finished: Optional[float]
+    tasks: List[TaskSnapshot]
+
+    def save(self, filepath: Path) -> None:
+        data = json.dumps(dataclasses.asdict(self), indent=4)
+        filepath.write_text(data)
+
+    @classmethod
+    def load(cls, filepath: Path) -> "StateSnapshot":
+        data = json.loads(filepath.read_text())
+        return dict_to_dataclass(StateSnapshot, data)
+
+
+T = TypeVar("T")
+
+
+def dict_to_dataclass(data_type: Callable[..., T], data: Any) -> T:
+    # Dataclasses (expects a dict)
+    if hasattr(data_type, "__dataclass_fields__"):
+        fieldtypes = {field.name: field.type for field in dataclasses.fields(data_type)}
+        return data_type(**{key: dict_to_dataclass(fieldtypes[key], value) for key, value in data.items()})
+
+    # Generic types
+    elif hasattr(data_type, "__origin__"):
+        # Optional[type]
+        if data_type.__origin__ == Union:  # type: ignore
+            try:
+                optional_type, nonetype = data_type.__args__  # type: ignore
+                assert type(None) == nonetype
+            except Exception:
+                raise Exception("Unsupported Union type. Only Optional supported.")
+            return None if data is None else dict_to_dataclass(optional_type, data)  # type: ignore
+        # List[type]
+        elif data_type.__origin__ == list:  # type: ignore
+            item_type, = data_type.__args__  # type: ignore
+            return [dict_to_dataclass(item_type, item) for item in data]  # type: ignore
+        # Dict[type, type]
+        elif data_type.__origin__ == dict:  # type: ignore
+            key_type, value_type = data_type.__args__  # type: ignore
+            return {dict_to_dataclass(key_type, key): dict_to_dataclass(value_type, value) for key, value in data.items()}  # type: ignore
+        else:
+            raise Exception("Unsupported generic type")
+
+    # Simple types
+    simple_types = [int, float, str, bool]
+    if data_type in simple_types:  # type: ignore
+        if not isinstance(data, data_type):  # type: ignore
+            raise TypeError(f"Expected {data_type}, got '{type(data)}'")
+        return data  # type: ignore
+
+    raise TypeError(f"Unsupported type '{data_type}'")
+
+
+class State():
+    def __init__(self) -> None:
+        self.tasks: List[Task] = []
+        self.logdir = Path()
+
+        self.commit = ""
+        self.branch = ""
+        self.repo_name = ""
+        self.log_url = ""
+        self.identifier = ""
+
+        self.started = time.time()
+        self.finished: Optional[float] = None
+
+    def get_task_by_class(self, task_class: Type["Task"]) -> "Task":
+        for task in self.tasks:
+            if task.__class__ == task_class:
+                return task
+        raise Exception("Task not found: {}".format(task_class))
+
+    def status(self) -> Status:
+        return get_overall_status([task.status for task in self.tasks])
+
+    def snapshot(self) -> StateSnapshot:
+        return StateSnapshot(
+            commit=self.commit,
+            branch=self.branch,
+            repo_name=self.repo_name,
+            log_url=self.log_url,
+            identifier=self.identifier,
+            status=self.status().name,
+            started=self.started,
+            finished=self.finished,
+            tasks=[
+                TaskSnapshot(
+                    name=task.name,
+                    status=task.status.name,
+                    run_after=[self.get_task_by_class(task_class).name for task_class in task.run_after],
+                    run_always=task.run_always,
+                    started=task.started,
+                    finished=task.finished,
+                )
+                for task in self.tasks
+            ],
+        )
 
     def save(self) -> None:
         # Hack to initialize at runtime instead of init
@@ -47,30 +162,20 @@ class State():
         except AttributeError:
             self.save_lock = threading.Lock()
         with self.save_lock:
-            out = {
-                "commit": self.commit,
-                "branch": self.branch,
-                "repo_name": self.repo_name,
-                "log_url": self.log_url,
-                "meta": self.meta,
-                "tasks": [
-                    {"name": task.name, "status": task.status.name}
-                    for task in self.tasks
-                ],
-            }
-            (self.logdir / "taskstate.json").write_text(json.dumps(out, indent=4))
+            self.snapshot().save(self.logdir / "state.json")
 
 
 class Task:
     run_after: List[Type["Task"]] = []
     run_always = False
-    wait_for_semaphore = ""
 
     def __init__(self, state: State) -> None:
         self.state = state
         self.status = Status.not_started
         self.exception: Optional[Exception] = None
         self.completed = threading.Event()
+        self.started: Optional[float] = None
+        self.finished: Optional[float] = None
 
     @property
     def status(self) -> Status:
@@ -90,47 +195,40 @@ class Task:
 
     def _run(self) -> None:
         self.status = Status.running
-        print("Task started")
         try:
             self.wait_for_tasks(self.run_after)
             # if self.wait_for_semaphore:
             #     with self._wait_for_semaphore(self.wait_for_semaphore):
             #         self.run()
             # else:
+            print("Task started")
+            self.started = time.time()
             self.run()
+            self.status = Status.success
+            print("Task success")
         except Exception as e:
             if isinstance(e, Skipped):
                 self.status = Status.skipped
-                self.completed.set()
                 print("Task skipped")
             else:
                 self.status = Status.failed
-                self.completed.set()
                 self.exception = e
                 if isinstance(e, NonZeroExit):
                     print("Task failed: {}".format(e))
-                    raise
                 else:
                     print("Task failed")
                     for line in traceback.format_exc().splitlines():
                         print(line)
-                    raise  # unexpected Exception
-        else:
-            self.status = Status.success
+        finally:
+            self.finished = time.time()
             self.completed.set()
-            print("Task success")
 
-    def get_task_by_class(self, task_class: Type["Task"]) -> "Task":
-        for task in self.state.tasks:
-            if task.__class__ == task_class:
-                return task
-        raise Exception("Task not found: {}".format(task_class))
 
     def wait_for_tasks(self, task_classes: List[Type["Task"]]) -> None:
         if not task_classes:
             return
         self.status = Status.waiting_for_task
-        tasks = [self.get_task_by_class(task_class) for task_class in task_classes]
+        tasks = [self.state.get_task_by_class(task_class) for task_class in task_classes]
         for task in tasks:
             if not task.completed.is_set():
                 print("Waiting for task: {}".format(task.__class__.__name__))
@@ -142,18 +240,3 @@ class Task:
                 raise Skipped
         print("Finished waiting for tasks: {}".format(", ".join([task_class.__name__ for task_class in task_classes])))
         self.status = Status.running
-
-    # TODO: Reimplement file based semaphore for cross process/host support
-    # @contextlib.contextmanager
-    # def _wait_for_semaphore(self, sempahore_name: str) -> Iterator[str]:
-    #     self.status = Status.waiting_for_semaphore
-    #     semaphore = self.state.semaphores[sempahore_name]
-    #     did_wait = False
-    #     if semaphore.get_value() <= 0:  # Only print if we are likely to wait
-    #         did_wait = True
-    #         print("Waiting for semaphore {}".format(sempahore_name))
-    #     with semaphore:
-    #         if did_wait:
-    #             print("Finished waiting for semaphore: {}".format(sempahore_name))
-    #         self.status = Status.running
-    #         yield sempahore_name

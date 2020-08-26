@@ -40,6 +40,9 @@
         td.skipped{
             background-color: grey;
         }
+        form{
+            display:inline;
+        }
     </style>
 
     <style id="dynamic-style"></style>
@@ -76,17 +79,40 @@
         <tr>
             <td colspan=4>
                 <h1><a href="/">{{ title }}</a></h1>
-                <h3>{{ branch }} - <a href="#">{{ sha }}</a></h3>
+                <h3>
+                    {{ state.branch }} - <a href="#">{{ state.commit }}</a>
+                    {% if is_logged_in %}
+                        {% if not state.finished %}
+                            <form action="/kill/{{ state.identifier }}" method="POST"><button type="submit">Kill</button></form>
+                        {% endif %}
+                        <form action="/rerun/{{ state.identifier }}" method="POST"><button type="submit">Rerun</button></form>
+                    {% endif %}
+                </h3>
             </td>
         </tr>
-        {% for task in tasks %}
         <tr>
+            <td>
+                Duration
+            </td>
+            <td>
+                Status
+            </td>
+            <td>
+                Task
+            </td>
+        </tr>
+        {% for task in state.tasks %}
+        <tr>
+            <td>
+                {{ get_duration(task) }}
+            </td>
             <td id="taskstatus_{{ task.name }}" class="{{ task.status }}">
                 {{ task.status }}
             </td>
             <td width=100%>
+                {% autoescape false %}{{ "&nbsp;" * depth_in_tree(state, task.name) }}{% endautoescape -%}
                 <a href="#{{ task.name }}">
-                    {{ task.name }}
+                    {{- task.name }}
                 </a>
             </td>
         </tr>
@@ -103,11 +129,11 @@
 
     <script>
         window.onload = function() {
-            var source = new EventSource("/stream/{{ sha }}?id={{ line_number }}");
+            var source = new EventSource("{{ stream }}");
             source.addEventListener(
                 'line',
                 function(e) {
-                    isScrolledBottom = (window.innerHeight + window.pageYOffset) + 100 >= document.body.offsetHeight;
+                    isScrolledBottom = (window.innerHeight + window.pageYOffset) + 50 >= document.body.offsetHeight;
 
                     data = JSON.parse(e.data);
                     class_name = data[0];

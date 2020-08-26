@@ -41,6 +41,9 @@
         td.skipped{
             background-color: grey;
         }
+        form{
+            display:inline;
+        }
     </style>
 
     <center>
@@ -48,19 +51,40 @@
         <tr>
             <td colspan=4>
                 <h1>{{ title }}</h1>
+                {% if True %}
+                <h3>
+                    <form action="/trigger" method="POST"><button type="submit">Scan</button></form>
+                    {% if is_logged_in %}
+                    <form action="/logout" method="GET"><button type="submit">Logout</button></form>
+                    {% endif %}
+                </h3>
+                {% endif %}
             </td>
         </tr>
-        {% if show_logout %}
         <tr>
-            <td colspan=4>
-                <h3><a href="/logout">Logout</a></h3>
+            <td>
+                Timestamp
+            </td>
+            <td>
+                Duration
+            </td>
+            <td>
+                Status
+            </td>
+            <td>
+                Commit
+            </td>
+            <td style="width:100%">
+                Branch
             </td>
         </tr>
-        {% endif %}
         {% for build in builds %}
         <tr>
             <td>
                 {{ build.timestamp }}
+            </td>
+            <td>
+              {{ build.duration }}
             </td>
             <td class="{{ build.status }}">
                 {{ build.status }}
@@ -71,7 +95,7 @@
                 </a>
             </td>
             <td style="width:100%">
-                {{ build.branch }}
+              {{ build.branch }}{% for tag in build.tags %} <font color="yellow">{{ tag }}{% endfor %}</font>
             </td>
         </tr>
         {% endfor %}

@@ -6,11 +6,11 @@ from minimalci.executors import Local, LocalContainer
 
 def test_stash() -> None:
     with Local() as exe:
-        source = exe.stash("*")
+        source = exe.stash(".")
         ls = exe.sh("ls -l --time-style=+%s Dockerfile").decode()
 
     with LocalContainer("debian", path="/root") as exe2:
-        exe2.unstash(source, "Dockerfile")
+        exe2.unstash(source, "./Dockerfile")
         ls2 = exe2.sh("ls -l --time-style=+%s Dockerfile").decode()
         normalized1 = " ".join(ls.split()[:2] + ls.split()[4:])
         normalized2 = " ".join(ls2.split()[:2] + ls2.split()[4:])
@@ -22,8 +22,7 @@ def test_stash() -> None:
 def test_docker_in_docker() -> None:
     with Local() as exe:
         exe.sh("docker build . -t test")
-
-    with LocalContainer("test", path="/workdir", mount_docker=True) as exe2:
+    with LocalContainer("test", temp_path=True, mount_docker=True) as exe2:
         exe2.sh("docker ps")
 
 

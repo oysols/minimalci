@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y docker.io
 COPY server/requirements.txt .
 RUN pip3 install -r requirements.txt
 
-WORKDIR /workdir
+WORKDIR /temp
 COPY . ./
 RUN pip3 install .
 

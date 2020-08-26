@@ -5,7 +5,7 @@ setuptools.setup(
     version='0.1',
     packages=["minimalci"],
     py_modules=["dssh"],
-    entry_points = {
+    entry_points={
         'console_scripts': [
             'dssh=dssh:main',
         ],

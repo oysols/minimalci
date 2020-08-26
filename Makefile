@@ -6,9 +6,11 @@ build:
 test:
 	python3 tests/test_executors.py
 	python3 tests/test_taskrunner.py
+	python3 tests/test_failed_import.py
+	python3 tests/test_statesnapshot.py
 
 tasks:
-	python3 tasks.py
+	python3 -m minimalci.taskrunner
 
 check:
 	mypy minimalci --strict

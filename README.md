@@ -53,27 +53,22 @@ TODO
 # TODO
 
 ## Minimalci
-- Fix print prefix for running executors locally
-- Run taskrunner in docker
-- Log jsonlines to stdout?
 - Setup consistent executor queues without relying on local semaphore
+- Log jsonlines to stdout?
+- Fix print prefix for running executors locally
+- Consolidate command printing
 - Test and verify remote python execution
 - Only optionally write log/state
+- Set remote env on init of ssh executor
+
 
 ## Server
-- Authentication
-- Stop, Delete, Trigger from web UI
-- Do not print task logs to server logs
 - Write server logs to web view (git fetch/clone, import, ...)
-- Show current git tags in overview
 - Live update overview
 - Evaluate polling vs inotify
-- "Dependent task did not succeed" when raising Skipped. Handling by user instead?
 - state as magic global import?
-- Run taskrunner from webserver, not the other way around?
-- Visualize dependent tasks by using indentation
-- Detect crashed builds
 - Timeouts
+
 
 ## Alternative syntax?
 

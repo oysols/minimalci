@@ -39,6 +39,9 @@ if os.environ.get("GITHUB_CLIENT_ID"):
     )
     AUTHORIZED_USERS = os.environ["GITHUB_AUTHORIZED_USERS"].split(",")
 
+mounts = os.environ.get("ADDITIONAL_MOUNTS")
+ADDITIONAL_MOUNTS = mounts.split(",") if mounts else []
+
 
 # Advanced
 DATA_PATH = Path("data")

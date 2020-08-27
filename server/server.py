@@ -416,7 +416,6 @@ def start_taskrunner_in_docker(commit: str, branch: str) -> str:
 
     external_logdir = config.EXTERNAL_DATA_MOUNT_POINT / logdir.relative_to(config.DATA_PATH)
     external_workdir = config.EXTERNAL_DATA_MOUNT_POINT / workdir.relative_to(config.DATA_PATH)
-    external_secrets = config.EXTERNAL_DATA_MOUNT_POINT / config.SECRETS_PATH.relative_to(config.DATA_PATH)
 
     command = [
         "docker",
@@ -430,10 +429,10 @@ def start_taskrunner_in_docker(commit: str, branch: str) -> str:
         "-v", f"{external_workdir}:/workdir",
         "--workdir", "/workdir",
     ]
-    if config.SECRETS_PATH.is_dir():
-        command += [
-            "-v", f"{external_secrets}:/secrets:ro",
-        ]
+    for additional_mount in config.ADDITIONAL_MOUNTS:
+         command += [
+             "-v", additional_mount,
+         ]
     command += [
         config.TASKRUNNER_IMAGE,
         "python3",
@@ -475,7 +474,6 @@ def workspace_cleanup() -> None:
 
 def init() -> None:
     config.LOGS_PATH.mkdir(exist_ok=True)
-    config.SECRETS_PATH.mkdir(exist_ok=True)
     ssh_path = Path("~/.ssh").expanduser()
     ssh_path.mkdir(exist_ok=True)
     if len(list(ssh_path.iterdir())) == 0:

@@ -12,6 +12,9 @@ services:
             - REPO_NAME=minimalci
             - REPO_URL=git@github.com:oysols/minimalci.git
             - BASE_URL=http://35.227.107.72/
+
+            - ADDITIONAL_MOUNTS=/srv/minimalci/secrets:/secrets:ro
+
             # Optional
             - TASKS_FILE=tasks.py
             - DOCKER_REGISTRY

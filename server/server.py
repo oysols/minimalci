@@ -311,7 +311,6 @@ def repo_index() -> Tuple[str, int]:
 
 
 @app.route("/trigger", methods=["GET", "POST"])
-@require_authorization()
 def trigger() -> Tuple["str", int]:
     SCAN_TRIGGER.set()
     return "Looking for changes in remote repo", 200

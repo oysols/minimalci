@@ -221,6 +221,7 @@ class Task:
                         print(line)
         finally:
             self.finished = time.time()
+            self.state.save()
             self.completed.set()
 
 

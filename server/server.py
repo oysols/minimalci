@@ -437,7 +437,9 @@ def start_taskrunner_in_docker(commit: str, branch: str) -> str:
         config.TASKRUNNER_IMAGE,
         "python3",
         "-u",  # Unbuffered output
-        "-I",  # Isolate from current working dir (required for dogfooding to avoid using cwd minimalci)
+        # Isolate from current working dir
+        # Useful in dogfooding if we want to run the pipeline with a different version than is being tested
+        # "-I",
         "-m", "minimalci.taskrunner",
         "--commit", commit,
         "--branch", branch,

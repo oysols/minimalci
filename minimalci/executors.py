@@ -251,6 +251,12 @@ class Local(Executor):
         safe_del_tmp_file_atexit(stash_path)
         return Stash(stash_path)
 
+    def stash_from_git_archive(self, commit: str) -> Stash:
+        stash_path = random_tmp_file_path()
+        self.sh(f"git archive {quote(commit)} -o {quote(str(stash_path))} --format tar.gz")
+        safe_del_tmp_file_atexit(stash_path)
+        return Stash(stash_path)
+
     def unstash(self, stash: Stash, specific_file: str = "") -> None:
         self._untar_to_cwd(stash.path, specific_file)
 

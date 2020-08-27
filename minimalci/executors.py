@@ -301,7 +301,7 @@ class LocalContainer(Executor):
     def __init__(self, image: str = "debian", mount_docker: bool=False, **kwargs: Any):
         self.image = image
         self.mount_docker = mount_docker
-        self.container_name = secrets.token_hex(16)
+        self.container_name = "exe_" + secrets.token_hex(16)
         self.print_prefix = "" # TODO: get_print_prefix(self.image)
         super().__init__(**kwargs)
 

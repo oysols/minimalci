@@ -12,21 +12,12 @@ REPO_URL = os.environ.get("REPO_URL", ".")
 REPO_NAME = os.environ.get("REPO_NAME", "testing")
 BASE_URL = os.environ.get("BASE_URL", "http://localhost")
 
-
 # Optional
 TASKS_FILE = Path(os.environ.get("TASKS_FILE", "tasks.py"))
-DOCKER_REGISTRY = os.environ.get("DOCKER_REGISTRY")
-if DOCKER_REGISTRY:  # Docker registry auto login at import time
-    subprocess.check_call(
-        [
-            "docker",
-            "login",
-            DOCKER_REGISTRY,
-            "-u", os.environ.get("DOCKER_USER", ""),
-            "-p", os.environ.get("DOCKER_PASS", ""),
-        ]
-    )
+mounts = os.environ.get("ADDITIONAL_MOUNTS")
+ADDITIONAL_MOUNTS = mounts.split(",") if mounts else []
 
+# Authentication
 OAUTH_ENABLED = False
 if os.environ.get("GITHUB_CLIENT_ID"):
     OAUTH_ENABLED = True
@@ -39,15 +30,10 @@ if os.environ.get("GITHUB_CLIENT_ID"):
     )
     AUTHORIZED_USERS = os.environ["GITHUB_AUTHORIZED_USERS"].split(",")
 
-mounts = os.environ.get("ADDITIONAL_MOUNTS")
-ADDITIONAL_MOUNTS = mounts.split(",") if mounts else []
-
-
 # Advanced
 DATA_PATH = Path("data")
 REPO_PATH = DATA_PATH / "repo"
 LOGS_PATH = DATA_PATH / "logs"
-SECRETS_PATH = DATA_PATH / "secrets"
 WORK_PATH = DATA_PATH / "workspaces"
 LOGFILE = "output.log"
 STATEFILE = "state.json"

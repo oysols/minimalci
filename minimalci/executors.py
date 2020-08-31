@@ -13,6 +13,9 @@ import secrets
 from pathlib import Path
 
 
+SENSORED = "********"
+
+
 global_kill_signal = threading.Event()
 
 
@@ -93,67 +96,81 @@ class Stash:
         return self.read_bytes(specific_file).decode().strip()
 
 
+# Printing
+
+
+def print_command(command: str, print_prefix: str = "", censor: List[str] = []) -> None:
+    print_string = f"{print_prefix}+ {command}"
+    for item in censor:
+        print_string = print_string.replace(item, SENSORED)
+    print(print_string)
+
+
+def print_output(line: str, print_prefix: str) -> None:
+    print(f"{print_prefix}{line}")
+
+
 # Raw shells
 
 
-def local_shell(command: str, path: Path = Path(), print_prefix: str = "", **kwargs: Any) -> bytes:
+def local_shell(command: str, path: Path = Path(), print_prefix: str = "", censor: List[str] = [], **kwargs: Any) -> bytes:
     full_command = ["/bin/bash", "-ce", "cd {} && /bin/bash -ce {}".format(
         quote(str(path)),
         quote(command)
     )]
-    print(f"{print_prefix}+ {command}")
-    return run_command(full_command, print_prefix=print_prefix, **kwargs)
+    print_command(command, print_prefix, censor)
+    return run_command(full_command, print_prefix=print_prefix, censor=censor, **kwargs)
 
 
-def ssh_shell(host: str, command: str, path: Path = Path(), print_prefix: str = "", **kwargs: Any) -> bytes:
+def ssh_shell(host: str, command: str, path: Path = Path(), print_prefix: str = "", censor: List[str] = [], **kwargs: Any) -> bytes:
     full_command = ["ssh", host, "cd {} && /bin/bash -ce {}".format(
         quote(str(path)),
         quote(command),
     )]
-    print(f"{print_prefix}+ {command}")
-    return run_command(full_command, print_prefix=print_prefix, **kwargs)
+    print_command(command, print_prefix, censor)
+    return run_command(full_command, print_prefix=print_prefix, censor=censor, **kwargs)
 
 
 # Process control
 
 
-def stream_handler(stream: io.BytesIO, print_prefix: str = "", output_queue: "Optional[queue.Queue[str]]" = None) -> bytes:
+def stream_handler(stream: io.BytesIO, print_prefix: str = "", censor: List[str] = [], output_queue: "Optional[queue.Queue[str]]" = None) -> bytes:
     output = b""
     for raw_line in iter(stream.readline, b""):
         output += raw_line
         line = raw_line.decode().rstrip()
+        for item in censor:
+            line = line.replace(item, SENSORED)
         # Handle output including "\r" such as apt-get by removing
         line = line.replace("\r", "")
         if output_queue:
             output_queue.put(line)
         else:
-            print(print_prefix + line)
+            print_output(line, print_prefix)
     return output
 
 
-def kill_thread(process: "subprocess.Popen[Any]", kill_signal: threading.Event) -> None:
+def kill_thread(process: "subprocess.Popen[Any]", kill_signal: threading.Event, print_prefix: str) -> None:
     while not (kill_signal.is_set() or process.poll() is not None):
         kill_signal.wait(timeout=5)
     if process.poll() is None:
-        msg = "Killing process with SIGTERM"
-        print(msg)
+        print_output("Killing process with SIGTERM", print_prefix)
         process.terminate()
         try:
             process.wait(10)
         except subprocess.TimeoutExpired:
-            msg = "Process still running: Killing process with SIGKILL"
-            print(msg)
+            print_output("Process still running: Killing process with SIGKILL", print_prefix)
             process.kill()
             try:
                 process.wait(10)
             except subprocess.TimeoutExpired:
-                msg = "Failed to kill process with SIGKILL"
-                print(msg)
+                print_output("Failed to kill process with SIGKILL", print_prefix)
 
 
 def run_command(
     command: List[str],
     print_prefix: str = "",
+    censor: List[str] = [],
     output_queue: "Optional[queue.Queue[str]]" = None,
     kill_signal: Optional[threading.Event] = None,
     **kwargs: Any
@@ -167,14 +184,14 @@ def run_command(
         # Start process reaper thread
         threading.Thread(
             target=kill_thread,
-            args=(process, signal),
+            args=(process, signal, print_prefix),
             daemon=True,
             name=thread_name_prefix + secrets.token_hex(4)
         ).start()
         # Wait for stream handlers to complete to guarantee all output is processed before process is killed
         with concurrent.futures.ThreadPoolExecutor(2, thread_name_prefix=thread_name_prefix) as e:
-            stdout = e.submit(stream_handler, process.stdout, print_prefix, output_queue)
-            stderr = e.submit(stream_handler, process.stderr, print_prefix)
+            stdout = e.submit(stream_handler, process.stdout, print_prefix, censor, output_queue)
+            stderr = e.submit(stream_handler, process.stderr, print_prefix, censor)
     if process.returncode != 0:
         raise NonZeroExit(f"Exit code: {process.returncode}", stdout.result(), stderr.result())
     return stdout.result()
@@ -202,7 +219,7 @@ class Executor:
         if self.temp_path:
             self._safe_del_tmp_dir(self.path)
 
-    def sh(self, command: str, **kwargs: Any) -> bytes:
+    def sh(self, command: str, censor: List[str] = [], **kwargs: Any) -> bytes:
         raise NotImplementedError
 
     def _tar_to_tmp(self, path_str: str) -> Path:
@@ -243,8 +260,8 @@ class Executor:
 
 
 class Local(Executor):
-    def sh(self, command: str, **kwargs: Any) -> bytes:
-        return local_shell(command, path=self.path, **kwargs)
+    def sh(self, command: str, censor: List[str] = [], **kwargs: Any) -> bytes:
+        return local_shell(command, path=self.path, censor=censor, **kwargs)
 
     def stash(self, path: str) -> Stash:
         stash_path = self._tar_to_tmp(path)
@@ -266,8 +283,8 @@ class Ssh(Executor):
         self.host = host
         super().__init__(**kwargs)
 
-    def sh(self, command: str, **kwargs: Any) -> bytes:
-        return ssh_shell(self.host, command, path=self.path, **kwargs)
+    def sh(self, command: str, censor: List[str] = [], **kwargs: Any) -> bytes:
+        return ssh_shell(self.host, command, path=self.path, censor=censor, **kwargs)
 
     def stash(self, path_glob: str) -> Stash:
         remote_stash_path = self._tar_to_tmp(path_glob)
@@ -325,12 +342,12 @@ class LocalContainer(Executor):
             kill_signal=threading.Event(),  # Override global kill signal
         )
 
-    def sh(self, command: str, **kwargs: Any) -> bytes:
+    def sh(self, command: str, censor: List[str] = [], **kwargs: Any) -> bytes:
         for line in command.splitlines():
-            print(f"+ {line}")
+            print_command(line, self.print_prefix, censor)
         workdir = [] if self.path == Path() else ["--workdir", quote(str(self.path))]
         full_command = ["docker", "exec"] + workdir + ["-t", self.container_name, "/bin/bash", "-ce", command]
-        return run_command(full_command, print_prefix=self.print_prefix, **kwargs)
+        return run_command(full_command, print_prefix=self.print_prefix, censor=censor, **kwargs)
 
     def chown_file_to_docker_user(self, container_path: Path) -> bytes:
         docker_user = self.sh("whoami").decode().strip()
@@ -338,7 +355,7 @@ class LocalContainer(Executor):
             quote(docker_user),
             quote(str(container_path)),
         )
-        print(f"+ {command}")
+        print_command(command, self.print_prefix)
         full_command = ["docker", "exec", "--user", "root", self.container_name, "/bin/bash", "-ce", command]
         return run_command(full_command, print_prefix=self.print_prefix)
 
@@ -389,7 +406,6 @@ class LocalContainer(Executor):
         ]
         data_string = "\n".join(data)
         full_command = ["docker", "exec", "-t", self.container_name, "bash", "-ce", "python3 -uc {}".format(quote(data_string))]
-        print(full_command)
         output = run_command(full_command, print_prefix=self.print_prefix)
         last_line = output.decode().splitlines()[-1]
         try:
@@ -417,7 +433,7 @@ class LocalWithForwardedDockerSock(Local):
                 "echo 'ready' && cat"
         ]
         command_str = " ".join(command)
-        print(f"{self.print_prefix}+ {command_str}")
+        print_command(command_str, self.print_prefix)
         self.process = subprocess.Popen(command, stdout=PIPE, stderr=PIPE, stdin=PIPE)
         for raw_line in iter(self.process.stdout.readline, b""):  # type: ignore
             # Loop forever
@@ -427,7 +443,7 @@ class LocalWithForwardedDockerSock(Local):
         else:
             for raw_line in iter(self.process.stderr.readline, b""):  # type: ignore
                 line = raw_line.decode().rstrip()
-                print(line)
+                print_output(line, self.print_prefix)
             raise Exception("Forwarding failed")
         super().__enter__()
         return self
@@ -438,12 +454,13 @@ class LocalWithForwardedDockerSock(Local):
         self._safe_del_tmp_file(self.forwarded_socket)
         super().__exit__(exc_type, exc_value, traceback)
 
-    def sh(self, command: str, **kwargs: Any) -> bytes:
+    def sh(self, command: str, censor: List[str] = [], **kwargs: Any) -> bytes:
         env = os.environ.copy()
         env["DOCKER_HOST"] = "unix://{}".format(self.forwarded_socket)
         return local_shell(
                 command,
                 path=self.path,
                 print_prefix=self.print_prefix,
+                censor=censor,
                 env=env,
         )

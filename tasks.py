@@ -16,6 +16,7 @@ class Setup(Task):
             source = exe.stash(".")
             image_name = f"minimalci:{self.state.commit}"
             exe.sh(f"docker build . -t {image_name}")
+            exe.sh(f"echo secretstuff", censor=["secretstuff"])
 
 
 class Test(Task):

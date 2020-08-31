@@ -56,7 +56,6 @@ TODO
 - Setup consistent executor queues without relying on local semaphore
 - Log jsonlines to stdout?
 - Fix print prefix for running executors locally
-- Consolidate command printing
 - Test and verify remote python execution
 - Only optionally write log/state
 - Set remote env on init of ssh executor

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from minimalci.executors import LocalContainer, Local, Stash
 from minimalci.tasks import Task, Status
 from minimalci import task_util
@@ -6,17 +8,17 @@ from minimalci import task_util
 image_name: str
 source: Stash
 
-# github_auth = Path("/secrets/github_auth.txt").read_text().strip()
-
 
 class Setup(Task):
     def run(self) -> None:
+        # github_auth = Path("/secrets/github_auth.txt").read_text().strip()
         with Local() as exe:
+            exe.sh(f"echo secretstuff", censor=["secretstuff"])
+
             global source, image_name
-            source = exe.stash(".")
+            source = exe.stash_from_git_archive(self.state.commit)
             image_name = f"minimalci:{self.state.commit}"
             exe.sh(f"docker build . -t {image_name}")
-            exe.sh(f"echo secretstuff", censor=["secretstuff"])
 
 
 class Test(Task):
@@ -42,7 +44,11 @@ class ErrorHandler(Task):
     run_always = True
 
     def run(self) -> None:
-        if all(task.status == Status.success for task in self.state.tasks if task is not self):
-            print("Set github status", task_util.GithubState.success.name)
+        if all(task.status in [Status.success, Status.skipped] for task in self.state.tasks if task is not self):
+            if self.state.identifier:  # If running on CI server
+                print("Set github status", task_util.GithubState.success.name)
+            print("GREAT SUCCESS")
         else:
-            print("Set github status", task_util.GithubState.failure.name)
+            if self.state.identifier:  # If running on CI server
+                print("Set github status", task_util.GithubState.failure.name)
+            print("SOMETHING FAILED")

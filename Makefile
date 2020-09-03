@@ -8,9 +8,10 @@ test:
 	python3 tests/test_taskrunner.py
 	python3 tests/test_failed_import.py
 	python3 tests/test_statesnapshot.py
+	python3 tests/test_semaphore.py
 
 tasks:
-	python3 -m minimalci.taskrunner
+	python3 -m minimalci.taskrunner --commit $(SHA)
 
 check:
 	mypy minimalci --strict

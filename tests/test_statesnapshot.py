@@ -20,6 +20,8 @@ def test_state_snapshot() -> None:
                     "status": "running",
                     "run_after": ["1", "2", "3"],
                     "run_always": True,
+                    "aquire_semaphore": [],
+                    "aquired_semaphore": "",
                     "started": 4.0,
                     "finished": 5.0,
                 },

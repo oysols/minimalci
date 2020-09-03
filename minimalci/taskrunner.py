@@ -13,7 +13,7 @@ import traceback
 import argparse
 import signal
 
-from .executors import global_kill_signal_handler, Stash
+from .executors import global_kill_signal_handler
 from .tasks import Task, State
 
 

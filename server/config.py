@@ -37,7 +37,7 @@ LOGS_PATH = DATA_PATH / "logs"
 WORK_PATH = DATA_PATH / "workspaces"
 LOGFILE = "output.log"
 STATEFILE = "state.json"
-
+ISOLATE_PYTHON = os.environ.get("ISOLATE_PYTHON")  # Only relevant for running minimalci on itself
 
 # Introspection when running in docker
 def get_self_container_id() -> Optional[str]:

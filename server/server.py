@@ -310,6 +310,11 @@ def repo_index() -> Tuple[str, int]:
 # Actions
 
 
+def get_external_link_string(identifier: str) -> str:
+    external_url = f"/logs/{identifier}"
+    return f'<a href="{external_url}">{external_url}</a>'
+
+
 @app.route("/trigger", methods=["GET", "POST"])
 def trigger() -> Tuple["str", int]:
     SCAN_TRIGGER.set()
@@ -330,10 +335,10 @@ def kill(identifier: str) -> Tuple["str", int]:
                     updated_state.finished = time.time()
                     updated_state.status = Status.failed.name
                     updated_state.save(state_path)
-                    return "Container not running. Status set to FAILED.", 200
+                    return "Container not running. Overall status manually set to FAILED.", 200
                 else:
                     return "Container not running", 400
-            return "Sent SIGTERM to container", 200
+            return f"Sent SIGTERM to container {get_external_link_string(identifier)}", 200
     return "Identifier not found", 404
 
 
@@ -343,8 +348,7 @@ def rerun(identifier: str) -> Tuple["str", int]:
     for state_path, state in get_state_snapshots():
         if state.identifier == identifier:
             new_identifier = start_taskrunner_in_docker(state.commit, state.branch)
-            external_url = f"/logs/{new_identifier}"
-            return f'Rerunning at <a href="{external_url}">{external_url}</a>', 201
+            return f'Rerunning at {get_external_link_string(new_identifier)}', 201
     return "Identifer not found", 404
 
 
@@ -436,9 +440,12 @@ def start_taskrunner_in_docker(commit: str, branch: str) -> str:
         config.TASKRUNNER_IMAGE,
         "python3",
         "-u",  # Unbuffered output
+    ]
+    if config.ISOLATE_PYTHON:
         # Isolate from current working dir
-        # Useful in dogfooding if we want to run the pipeline with a different version than is being tested
-        # "-I",
+        # To avoid problems running minimalci on itself
+        command += ["-I"]
+    command += [
         "-m", "minimalci.taskrunner",
         "--commit", commit,
         "--branch", branch,

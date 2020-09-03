@@ -1,5 +1,5 @@
 import threading
-from typing import List, Optional, Type, Any, Union, TypeVar, Callable
+from typing import List, Optional, Type, Any, Union, TypeVar, Callable, ContextManager
 import dataclasses
 import traceback
 import time
@@ -8,7 +8,8 @@ from pathlib import Path
 import enum
 from dataclasses import dataclass
 
-from minimalci.executors import NonZeroExit, Stash
+from minimalci.executors import NonZeroExit, global_kill_signal
+from minimalci import semaphore
 
 
 class Status(enum.Enum):
@@ -26,9 +27,11 @@ def get_overall_status(status_list: List[Status]) -> Status:
         return Status.skipped
     if all(status in [Status.success, Status.skipped] for status in status_list):
         return Status.success
-    if any(status == Status.running for status in status_list):
+    if Status.running in status_list:
         return Status.running
-    if any(status == Status.waiting_for_task for status in status_list):
+    if all(status in [Status.waiting_for_semaphore, Status.waiting_for_task] for status in status_list):
+        return Status.waiting_for_semaphore
+    if Status.waiting_for_task in status_list:
         return Status.waiting_for_task
     return Status.failed
 
@@ -43,6 +46,8 @@ class TaskSnapshot:
     status: str
     run_after: List[str]
     run_always: bool
+    aquire_semaphore: List[str]
+    aquired_semaphore: str
     started: Optional[float]
     finished: Optional[float]
 
@@ -148,6 +153,8 @@ class State():
                     status=task.status.name,
                     run_after=[self.get_task_by_class(task_class).name for task_class in task.run_after],
                     run_always=task.run_always,
+                    aquire_semaphore=task.aquire_semaphore,
+                    aquired_semaphore=task.aquired_semaphore,
                     started=task.started,
                     finished=task.finished,
                 )
@@ -168,10 +175,12 @@ class State():
 class Task:
     run_after: List[Type["Task"]] = []
     run_always = False
+    aquire_semaphore: List[str] = []
 
     def __init__(self, state: State) -> None:
         self.state = state
         self.status = Status.not_started
+        self.aquired_semaphore: str = ""
         self.exception: Optional[Exception] = None
         self.completed = threading.Event()
         self.started: Optional[float] = None
@@ -194,18 +203,36 @@ class Task:
         raise NotImplementedError
 
     def _run(self) -> None:
-        self.status = Status.running
         try:
             self.wait_for_tasks(self.run_after)
-            # if self.wait_for_semaphore:
-            #     with self._wait_for_semaphore(self.wait_for_semaphore):
-            #         self.run()
-            # else:
-            print("Task started")
-            self.started = time.time()
-            self.run()
-            self.status = Status.success
-            print("Task success")
+            if self.aquire_semaphore:
+                self.status = Status.waiting_for_semaphore
+                print(f'Waiting for semaphore: {" ".join(self.aquire_semaphore)}')
+                self_description = ":".join([self.name, self.state.repo_name, self.state.identifier])
+                semaphore_queues: List[ContextManager[Any]] = [
+                    semaphore.semaphore_queue(
+                        semaphore_string,
+                        self_description=self_description,
+                        verbose=True,
+                        kill_signal=global_kill_signal,
+                    )
+                    for semaphore_string in self.aquire_semaphore
+                ]
+                with semaphore.aquire_either_lock(semaphore_queues) as aquired_semaphore:
+                    self.aquired_semaphore = self.aquire_semaphore[semaphore_queues.index(aquired_semaphore)]
+                    print("Task started")
+                    self.started = time.time()
+                    self.status = Status.running
+                    self.run()
+                    print("Task success")
+                    self.status = Status.success
+            else:
+                print("Task started")
+                self.started = time.time()
+                self.status = Status.running
+                self.run()
+                print("Task success")
+                self.status = Status.success
         except Exception as e:
             if isinstance(e, Skipped):
                 self.status = Status.skipped
@@ -223,7 +250,6 @@ class Task:
             self.finished = time.time()
             self.state.save()
             self.completed.set()
-
 
     def wait_for_tasks(self, task_classes: List[Type["Task"]]) -> None:
         if not task_classes:

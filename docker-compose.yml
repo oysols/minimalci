@@ -17,9 +17,6 @@ services:
 
             # Optional
             - TASKS_FILE=tasks.py
-            - DOCKER_REGISTRY
-            - DOCKER_USER
-            - DOCKER_PASS
             - GITHUB_CLIENT_ID
             - GITHUB_CLIENT_SECRET
             - GITHUB_AUTHORIZED_USERS  # user1,user2,user3

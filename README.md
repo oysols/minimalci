@@ -44,7 +44,6 @@ TODO
 
 - Modify docker-compose.yml according to requirements
 - Optional: Add github oauth client id and secret
-- Optional: Add docker registry username and password
 - Start server with `docker-compose up -d`
 - Authorize auto-generated ssh public key (found in `docker-compose logs` and on disk)
 - Optional: Register web-hook `/trigger` for triggering repository scan
@@ -53,7 +52,6 @@ TODO
 # TODO
 
 ## Minimalci
-- Setup consistent executor queues without relying on local semaphore
 - Log jsonlines to stdout?
 - Fix print prefix for running executors locally
 - Test and verify remote python execution

@@ -11,6 +11,7 @@ import os
 import atexit
 import secrets
 from pathlib import Path
+import functools
 
 
 SENSORED = "********"
@@ -99,11 +100,20 @@ class Stash:
 # Printing
 
 
+def print_color(color: int, text: str) -> None:
+    print(f"\u001b[3{color}m{text}\033[0m")
+
+
+print_red = functools.partial(print_color, 1)
+print_green = functools.partial(print_color, 2)
+print_yellow = functools.partial(print_color, 3)
+
+
 def print_command(command: str, print_prefix: str = "", censor: List[str] = []) -> None:
     print_string = f"{print_prefix}+ {command}"
     for item in censor:
         print_string = print_string.replace(item, SENSORED)
-    print(print_string)
+    print_yellow(print_string)
 
 
 def print_output(line: str, print_prefix: str) -> None:

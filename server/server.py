@@ -304,7 +304,13 @@ def repo_index() -> Tuple[str, int]:
             "sha": snapshot.commit[:8],
             "tags": tags.get(snapshot.commit, []),
         })
-    return render_template("builds.html", builds=builds, title=title, is_logged_in=is_logged_in()), 200
+    return render_template(
+        "builds.html",
+        title=title,
+        image_name=config.SELF_IMAGE_NAME,
+        builds=builds,
+        is_logged_in=is_logged_in(),
+    ), 200
 
 
 # Actions

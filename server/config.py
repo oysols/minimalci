@@ -2,7 +2,7 @@ from pathlib import Path
 import json
 import os
 import subprocess
-from typing import Optional
+from typing import Optional, Tuple
 
 import oauth
 
@@ -39,6 +39,7 @@ LOGFILE = "output.log"
 STATEFILE = "state.json"
 ISOLATE_PYTHON = os.environ.get("ISOLATE_PYTHON")  # Only relevant for running minimalci on itself
 
+
 # Introspection when running in docker
 def get_self_container_id() -> Optional[str]:
     cpuset = Path("/proc/1/cpuset").read_text().strip()
@@ -49,11 +50,12 @@ def get_self_container_id() -> Optional[str]:
         return None
 
 
-def get_image_name_from_container_id(container_id: str) -> str:
+def get_image_from_container_id(container_id: str) -> Tuple[str, str]:
     data = json.loads(subprocess.check_output(["docker", "inspect", container_id]).decode())
     assert len(data) == 1
-    _, image_name = data[0]["Image"].split(":")
-    return str(image_name)
+    _, image_id = data[0]["Image"].split(":")
+    image_name = data[0]["Config"]["Image"]
+    return str(image_name), str(image_name)
 
 
 def get_external_mount_point(container_id: str, internal_path: str) -> Path:
@@ -67,6 +69,7 @@ def get_external_mount_point(container_id: str, internal_path: str) -> Path:
 
 
 SELF_CONTAINER_ID = get_self_container_id()
-TASKRUNNER_IMAGE = get_image_name_from_container_id(SELF_CONTAINER_ID) if SELF_CONTAINER_ID else "minimalci:latest"
+SELF_IMAGE_NAME, SELF_IMAGE_ID = get_image_from_container_id(SELF_CONTAINER_ID) if SELF_CONTAINER_ID else ("", "")
+TASKRUNNER_IMAGE = SELF_IMAGE_ID or "minimalci:latest"
 EXTERNAL_DATA_MOUNT_POINT = get_external_mount_point(SELF_CONTAINER_ID, str(DATA_PATH.absolute())) if SELF_CONTAINER_ID else DATA_PATH.absolute()
 EXTERNAL_SSH_MOUNT_POINT = get_external_mount_point(SELF_CONTAINER_ID, str(Path("~/.ssh").expanduser())) if SELF_CONTAINER_ID else Path("~/.ssh").expanduser()

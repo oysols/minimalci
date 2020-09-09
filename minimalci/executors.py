@@ -110,10 +110,10 @@ print_yellow = functools.partial(print_color, 3)
 
 
 def print_command(command: str, print_prefix: str = "", censor: List[str] = []) -> None:
-    print_string = f"{print_prefix}+ {command}"
     for item in censor:
-        print_string = print_string.replace(item, SENSORED)
-    print_yellow(print_string)
+        command = command.replace(item, SENSORED)
+    stripped_command = [line.strip() for line in command.splitlines() if line]
+    print_yellow(f"{print_prefix}+ " + f"\n{print_prefix}  ".join(stripped_command))
 
 
 def print_output(line: str, print_prefix: str) -> None:
@@ -353,8 +353,7 @@ class LocalContainer(Executor):
         )
 
     def sh(self, command: str, censor: List[str] = [], **kwargs: Any) -> bytes:
-        for line in command.splitlines():
-            print_command(line, self.print_prefix, censor)
+        print_command(command, self.print_prefix, censor)
         workdir = [] if self.path == Path() else ["--workdir", quote(str(self.path))]
         full_command = ["docker", "exec"] + workdir + ["-t", self.container_name, "/bin/bash", "-ce", command]
         return run_command(full_command, print_prefix=self.print_prefix, censor=censor, **kwargs)

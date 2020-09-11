@@ -21,6 +21,13 @@ with Local() as e:
     e.unstash(my_stash)
 ```
 
+- Semaphore queue `semaphore.py` / `semaphore_subprocess.py`
+
+```
+with semaphore_queue("user@remote_host:path/to/semaphore.queue"):
+    do_stuff_while_holding_semaphore()
+```
+
 - Tasks / Taskrunner `tasks.py` / `taskrunner.py`
 
 ```python

@@ -117,6 +117,8 @@ def semaphore_queue(path: str, self_description: str = "", verbose: bool = False
         command = ["bash", "-ce"]  # Run in shell for consistency with ssh version
     command += [f"python3 -u - {filename} --self-description={self_description}"]
     semaphore_process_source = inspect.getsource(semaphore_subprocess)
+    if verbose:
+        print(f"Semaphore {path}: Acquiring")
     while True:
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         threading.Thread(
@@ -133,23 +135,23 @@ def semaphore_queue(path: str, self_description: str = "", verbose: bool = False
                 if verbose:
                     if line.startswith(semaphore_subprocess.MESSAGE_PREFIX):
                         message = line[len(semaphore_subprocess.MESSAGE_PREFIX):]
-                        print(message)
+                        print(f"Semaphore {path}: {message}")
                 if line == semaphore_subprocess.SEMAPHORE_AQUIRED:
                     if verbose:
-                        print(f"Semaphore aquired {path}")
+                        print(f"Semaphore {path}: Acquired")
                     try:
                         yield
                     finally:
                         if verbose:
-                            print(f"Semaphore released {path}")
+                            print(f"Semaphore {path}: Released")
                         process.terminate()
                         process.wait()
-                        return
+                    return
             if kill_signal.is_set() or process.wait() == 0:  # Required to handle KeyboardInterrupt
                 raise Exception("Killed while waiting for semaphore")
-            print("Semaphore process crashed")
+            print(f"Semaphore {path}: Process crashed")
             time.sleep(10)
-            print("Retrying semaphore")
+            print(f"Semaphore {path}: Retrying")
         finally:
             process.terminate()
             process.wait()
@@ -171,3 +173,17 @@ def read_queue(path: str) -> Tuple[str, List[Dict[str, Any]]]:
     raw_output = process.stdout.read()  # type: ignore
     concurrency, queue = json.loads(raw_output)
     return concurrency, queue
+
+
+if __name__ == "__main__":
+    """Command line interface for non-python systems"""
+    import argparse
+    parser = argparse.ArgumentParser(description='Run command while holding semaphore')
+    parser.add_argument('path', help='Path to queue (host:path / path)')
+    parser.add_argument('--self-description', help='Description to add to self in queue', default='')
+    parser.add_argument('--verbose', help='Verbose output', action="store_true")
+    parser.add_argument('command', nargs="+", help='Command to run')
+    args = parser.parse_args()
+
+    with semaphore_queue(args.path, self_description=args.self_description, verbose=True):
+        subprocess.check_call(args.command)

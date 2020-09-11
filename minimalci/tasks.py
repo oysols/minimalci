@@ -207,7 +207,6 @@ class Task:
             self.wait_for_tasks(self.run_after)
             if self.aquire_semaphore:
                 self.status = Status.waiting_for_semaphore
-                print(f'Waiting for semaphore: {" ".join(self.aquire_semaphore)}')
                 self_description = ":".join([self.name, self.state.repo_name, self.state.identifier])
                 semaphore_queues: List[ContextManager[Any]] = [
                     semaphore.semaphore_queue(

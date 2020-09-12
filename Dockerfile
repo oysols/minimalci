@@ -1,4 +1,4 @@
-FROM python:3.8@sha256:ad7fb5bb4770e08bf10a895ef64a300b288696a1557a6d02c8b6fba98984b86a
+FROM python:3.8@sha256:c7853c950ced571d51987ba48ba5153c640ae78794639891806e03e57a321439
 
 RUN apt-get update && apt-get install -y docker.io
 

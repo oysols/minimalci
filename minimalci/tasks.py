@@ -29,10 +29,10 @@ def get_overall_status(status_list: List[Status]) -> Status:
         return Status.success
     if Status.running in status_list:
         return Status.running
-    if all(status in [Status.waiting_for_semaphore, Status.waiting_for_task] for status in status_list):
+    if Status.waiting_for_semaphore in status_list:
         return Status.waiting_for_semaphore
     if Status.waiting_for_task in status_list:
-        return Status.waiting_for_task
+        return Status.waiting_for_task  # Should only happen momentarily in race conditions
     return Status.failed
 
 

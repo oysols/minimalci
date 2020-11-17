@@ -1,4 +1,4 @@
-from typing import Optional, Any, Type, List, TypeVar
+from typing import Optional, Any, Type, List, TypeVar, Callable
 import queue
 from types import TracebackType, FunctionType, FrameType
 import threading
@@ -25,10 +25,11 @@ def global_kill_signal_handler(signum: int, frame: FrameType) -> None:
     global_kill_signal.set()
 
 
-class NonZeroExit(Exception):
-    def __init__(self, message: str, stdout: bytes, stderr: bytes):
+class ProcessError(Exception):
+    def __init__(self, message: str, stdout: Optional[bytes] = None, stderr: Optional[bytes] = None, exit_code: Optional[int] = None):
         self.stdout = stdout
         self.stderr = stderr
+        self.exit_code = exit_code
         super().__init__(message)
 
 
@@ -145,7 +146,13 @@ def ssh_shell(host: str, command: str, path: Path = Path(), print_prefix: str = 
 # Process control
 
 
-def stream_handler(stream: io.BytesIO, print_prefix: str = "", censor: List[str] = [], output_queue: "Optional[queue.Queue[str]]" = None) -> bytes:
+def stream_handler(
+    stream: io.BytesIO,
+    should_print: bool = True,
+    print_prefix: str = "",
+    censor: List[str] = [],
+    output_queue: "Optional[queue.Queue[str]]" = None,
+) -> bytes:
     output = b""
     for raw_line in iter(stream.readline, b""):
         output += raw_line
@@ -156,26 +163,36 @@ def stream_handler(stream: io.BytesIO, print_prefix: str = "", censor: List[str]
         line = line.replace("\r", "")
         if output_queue:
             output_queue.put(line)
-        else:
+        if should_print:
             print_output(line, print_prefix)
     return output
 
 
-def kill_thread(process: "subprocess.Popen[Any]", kill_signal: threading.Event, timeout: Optional[int], print_prefix: str) -> None:
+def kill_thread(
+    process: "subprocess.Popen[Any]",
+    term_callback: Callable[[], None],
+    kill_callback: Callable[[], None],
+    kill_signal: threading.Event,
+    timeout: Optional[int],
+    print_prefix: str,
+    delay: int = 0,
+) -> None:
     start = time.time()
     while not (kill_signal.is_set() or process.poll() is not None):
         kill_signal.wait(timeout=1)
         if timeout is not None and (time.time() - start) < timeout:
-            print_output(f"Process timed out after: {timeout} seconds")
+            print_output(f"Process timed out after: {timeout} seconds", print_prefix)
             break
+    if process.poll() is None and delay:
+        time.sleep(delay)  # Delay kill process
     if process.poll() is None:
         print_output("Killing process with SIGTERM", print_prefix)
-        process.terminate()
+        term_callback()
         try:
             process.wait(10)
         except subprocess.TimeoutExpired:
             print_output("Process still running: Killing process with SIGKILL", print_prefix)
-            process.kill()
+            kill_callback()
             try:
                 process.wait(10)
             except subprocess.TimeoutExpired:
@@ -184,6 +201,7 @@ def kill_thread(process: "subprocess.Popen[Any]", kill_signal: threading.Event, 
 
 def run_command(
     command: List[str],
+    should_print: bool = True,
     print_prefix: str = "",
     censor: List[str] = [],
     output_queue: "Optional[queue.Queue[str]]" = None,
@@ -193,23 +211,109 @@ def run_command(
 ) -> bytes:
     signal = kill_signal or global_kill_signal
     if signal.is_set():
-        raise NonZeroExit(f"Process killed", b"", b"")
+        raise ProcessError(f"Process start cancelled")
     with subprocess.Popen(command, stdout=PIPE, stderr=PIPE, stdin=DEVNULL, **kwargs) as process:
         # Set thread name to match parent thread for taskrunner output aggregation
         thread_name_prefix = threading.current_thread().name + "-"
         # Start process reaper thread
         threading.Thread(
             target=kill_thread,
-            args=(process, signal, timeout, print_prefix),
+            args=(process, process.terminate, process.kill, signal, timeout, print_prefix),
             daemon=True,
             name=thread_name_prefix + secrets.token_hex(4)
         ).start()
         # Wait for stream handlers to complete to guarantee all output is processed before process is killed
         with concurrent.futures.ThreadPoolExecutor(2, thread_name_prefix=thread_name_prefix) as e:
-            stdout = e.submit(stream_handler, process.stdout, print_prefix, censor, output_queue)
-            stderr = e.submit(stream_handler, process.stderr, print_prefix, censor)
+            stdout = e.submit(stream_handler, process.stdout, should_print, print_prefix, censor, output_queue)
+            stderr = e.submit(stream_handler, process.stderr, should_print, print_prefix, censor)
     if process.returncode != 0:
-        raise NonZeroExit(f"Exit code: {process.returncode}", stdout.result(), stderr.result())
+        raise ProcessError(f"Exit code: {process.returncode}", stdout.result(), stderr.result(), process.returncode)
+    return stdout.result()
+
+
+def run_docker_exec_command(
+    command: str,
+    container_name: str,
+    options: List[str] = [],
+    print_prefix: str = "",
+    censor: List[str] = [],
+    output_queue: "Optional[queue.Queue[str]]" = None,
+    kill_signal: Optional[threading.Event] = None,
+    timeout: Optional[int] = None,
+    **kwargs: Any
+) -> bytes:
+    """Run commands inside container with docker exec
+
+    This is a hack to send termination signals to processes started with docker exec.
+
+    When sending sigterm to the `docker exec` command, the `docker exec` process terminates,
+    but it does not forward the signal to the process running in the container.
+    This results in the process running indefinitely if the container keeps running,
+    or results in the process being killed with sigkill at container termination.
+
+    Being killed with sigkill will not allow the program to perform clean up actions.
+
+    The most noteable example of this is running processes that spawn temporary docker
+    containers of their own, since they will not get run time to remove those containers.
+
+    https://github.com/moby/moby/issues/9098
+    https://github.com/moby/moby/pull/38704
+    """
+    # TODO: Delete this function when `docker exec` signal handling is fixed
+    full_command = ["docker", "exec"] + options + [container_name]
+    full_command += ["/bin/bash", "-ce", "echo MAGICSTRING $$\n" + command]
+
+    signal = kill_signal or global_kill_signal
+    if signal.is_set():
+        raise ProcessError(f"Process start cancelled")
+    with subprocess.Popen(full_command, stdout=PIPE, stderr=PIPE, stdin=DEVNULL, **kwargs) as process:
+        # Set thread name to match parent thread for taskrunner output aggregation
+        thread_name_prefix = threading.current_thread().name + "-"
+
+        # Last resort kill docker exec process itself
+        threading.Thread(
+            target=kill_thread,
+            args=(process, process.terminate, process.kill, signal, timeout, print_prefix),
+            kwargs={"delay": 25},  # Wait until we try the docker exec kill path
+            daemon=True,
+            name=thread_name_prefix + secrets.token_hex(4),
+        ).start()
+
+        # Extract process PID from stdout
+        assert process.stdout  # make mypy happy
+        first_line = process.stdout.readline().decode()
+        try:
+            magic_string, raw_pid = first_line.split()
+            assert magic_string == "MAGICSTRING"
+            pid = int(raw_pid)
+        except:
+            raise ProcessError(f"Error parsing pid from first line: {first_line}")
+
+        # Wait for stream handlers to complete to guarantee all output is processed before process is killed
+        with concurrent.futures.ThreadPoolExecutor(2, thread_name_prefix=thread_name_prefix) as e:
+            stdout = e.submit(stream_handler, process.stdout, True, print_prefix, censor, output_queue)
+            stderr = e.submit(stream_handler, process.stderr, True, print_prefix, censor)
+
+            # Start process reaper thread
+            # Kill process from inside docker container
+            term_handler = functools.partial(
+                run_command,
+                ["docker", "exec", container_name, "kill", "-SIGTERM", str(pid)],
+                kill_signal=threading.Event(),
+            )
+            kill_handler = functools.partial(
+                run_command,
+                ["docker", "exec", container_name, "kill", "-SIGKILL", str(pid)],
+                kill_signal=threading.Event(),
+            )
+            threading.Thread(
+                target=kill_thread,
+                args=(process, term_handler, kill_handler, signal, timeout, print_prefix),
+                daemon=True,
+                name=thread_name_prefix + secrets.token_hex(4)
+            ).start()
+    if process.returncode != 0:
+        raise ProcessError(f"Exit code: {process.returncode}", stdout.result(), stderr.result(), process.returncode)
     return stdout.result()
 
 
@@ -358,11 +462,21 @@ class LocalContainer(Executor):
             kill_signal=threading.Event(),  # Override global kill signal
         )
 
+
     def sh(self, command: str, censor: List[str] = [], **kwargs: Any) -> bytes:
         print_command(command, self.print_prefix, censor)
-        workdir = [] if self.path == Path() else ["--workdir", quote(str(self.path))]
-        full_command = ["docker", "exec"] + workdir + ["-t", self.container_name, "/bin/bash", "-ce", command]
-        return run_command(full_command, print_prefix=self.print_prefix, censor=censor, **kwargs)
+        options = [] if self.path == Path() else ["--workdir", quote(str(self.path))]
+        return run_docker_exec_command(command, self.container_name, options=options, **kwargs)
+
+
+    # TODO: Reinstate this function once `docker exec` signaling is fixed
+    # def sh(self, command: str, censor: List[str] = [], **kwargs: Any) -> bytes:
+    #     print_command(command, self.print_prefix, censor)
+    #     workdir = [] if self.path == Path() else ["--workdir", quote(str(self.path))]
+    #     full_command = ["docker", "exec"] + workdir + [self.container_name,]
+    #     full_command += ["/bin/bash", "-ce", command]
+    #     return run_command(full_command, print_prefix=self.print_prefix, censor=censor, **kwargs)
+
 
     def chown_file_to_docker_user(self, container_path: Path) -> bytes:
         docker_user = self.sh("whoami").decode().strip()

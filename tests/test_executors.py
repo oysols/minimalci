@@ -1,7 +1,10 @@
+import concurrent.futures
+import subprocess
+import time
 import sys
-sys.path.append(".")
 
-from minimalci.executors import Local, LocalContainer
+sys.path.append(".")
+from minimalci.executors import Local, LocalContainer, global_kill_signal, ProcessError, Stash
 
 
 def test_stash() -> None:
@@ -31,7 +34,32 @@ def test_temp_path() -> None:
         assert exe.sh("pwd").decode().strip().startswith("/tmp/")
 
 
+def test_docker_exec_signal_handling() -> None:
+    def run_catch(exe: LocalContainer, catch_signal_stash: Stash) -> None:
+        exe.unstash(catch_signal_stash)
+        exe.sh("python3 -u tests/catch_signals.py")
+
+    with concurrent.futures.ThreadPoolExecutor(1) as e:
+        with Local() as local_exe:
+            catch_signal_stash = local_exe.stash("tests/catch_signals.py")
+
+        with LocalContainer("python") as exe:
+            f = e.submit(run_catch, exe, catch_signal_stash)
+            time.sleep(4)
+            global_kill_signal.set()
+            print("global_kill_signal set")
+            try:
+                f.result()
+            except ProcessError as e:
+                assert e.exit_code == 101
+            else:
+                raise Exception("Expected exception")
+        print("killed container")
+    global_kill_signal.clear()
+
+
 if __name__ == "__main__":
+    test_docker_exec_signal_handling()
     test_stash()
     test_temp_path()
     test_docker_in_docker()

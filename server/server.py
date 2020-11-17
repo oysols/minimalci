@@ -17,7 +17,7 @@ import shutil
 from flask import Flask, request, escape, Response, render_template, session
 import flask
 
-from minimalci.executors import run_command, NonZeroExit
+from minimalci.executors import run_command, ProcessError
 from minimalci.tasks import StateSnapshot, TaskSnapshot, Status
 
 import ansi2html
@@ -149,8 +149,8 @@ def tail_to_queue(path: Path, from_line: int, q: "queue.Queue[str]", kill_signal
 
     tail = ["tail", "-n", "+{}".format(from_line), "-f", str(path)]
     try:
-        run_command(tail, output_queue=q, kill_signal=kill_signal)
-    except NonZeroExit:
+        run_command(tail, should_print=False, output_queue=q, kill_signal=kill_signal)
+    except ProcessError:
         pass
 
 

@@ -8,7 +8,7 @@ from pathlib import Path
 import enum
 from dataclasses import dataclass
 
-from minimalci.executors import NonZeroExit, global_kill_signal
+from minimalci.executors import ProcessError, global_kill_signal
 from minimalci import semaphore
 
 
@@ -239,7 +239,7 @@ class Task:
             else:
                 self.status = Status.failed
                 self.exception = e
-                if isinstance(e, NonZeroExit):
+                if isinstance(e, ProcessError):
                     print("Task failed: {}".format(e))
                 else:
                     print("Task failed")

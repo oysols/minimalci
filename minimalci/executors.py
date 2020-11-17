@@ -12,6 +12,7 @@ import atexit
 import secrets
 from pathlib import Path
 import functools
+import time
 
 
 SENSORED = "********"
@@ -160,9 +161,13 @@ def stream_handler(stream: io.BytesIO, print_prefix: str = "", censor: List[str]
     return output
 
 
-def kill_thread(process: "subprocess.Popen[Any]", kill_signal: threading.Event, print_prefix: str) -> None:
+def kill_thread(process: "subprocess.Popen[Any]", kill_signal: threading.Event, timeout: Optional[int], print_prefix: str) -> None:
+    start = time.time()
     while not (kill_signal.is_set() or process.poll() is not None):
-        kill_signal.wait(timeout=5)
+        kill_signal.wait(timeout=1)
+        if timeout is not None and (time.time() - start) < timeout:
+            print_output(f"Process timed out after: {timeout} seconds")
+            break
     if process.poll() is None:
         print_output("Killing process with SIGTERM", print_prefix)
         process.terminate()
@@ -183,6 +188,7 @@ def run_command(
     censor: List[str] = [],
     output_queue: "Optional[queue.Queue[str]]" = None,
     kill_signal: Optional[threading.Event] = None,
+    timeout: Optional[int] = None,
     **kwargs: Any
 ) -> bytes:
     signal = kill_signal or global_kill_signal
@@ -194,7 +200,7 @@ def run_command(
         # Start process reaper thread
         threading.Thread(
             target=kill_thread,
-            args=(process, signal, print_prefix),
+            args=(process, signal, timeout, print_prefix),
             daemon=True,
             name=thread_name_prefix + secrets.token_hex(4)
         ).start()

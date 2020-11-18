@@ -24,11 +24,15 @@ import ansi2html
 import config
 import oauth
 
+DEBUG = False
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(64)
-
-DEBUG = False
+app.config.update(
+    SESSION_COOKIE_SECURE=False if DEBUG else True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',  # Default if unset
+)
 
 SCAN_TRIGGER = threading.Event()
 
@@ -262,6 +266,7 @@ def logs(identifier: str) -> Tuple[str, int]:
         get_duration=get_duration,
         is_logged_in=is_logged_in(),
         depth_in_tree=depth_in_tree,
+        DEBUG=DEBUG,
     ), 200
 
 
@@ -310,6 +315,7 @@ def repo_index() -> Tuple[str, int]:
         image_name=config.SELF_IMAGE_NAME,
         builds=builds,
         is_logged_in=is_logged_in(),
+        DEBUG=DEBUG,
     ), 200
 
 

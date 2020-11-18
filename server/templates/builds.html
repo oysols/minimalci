@@ -50,7 +50,7 @@
     <table style="width:100%;max-width:1000px;">
         <tr>
             <td colspan=5>
-                <h1>{{ title }}</h1>
+                <h1>{{ title }}{% if DEBUG %} - DEBUG{% endif %}</h1>
                 <a href="https://github.com/oysols/minimalci">minimalci</a> [{{ image_name }}]
                 {% if True %}
                 <h3>

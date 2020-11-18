@@ -78,7 +78,7 @@
     <table style="width:100%;max-width:1000px">
         <tr>
             <td colspan=4>
-                <h1><a href="/">{{ title }}</a></h1>
+                <h1><a href="/">{{ title }}{% if DEBUG %} - DEBUG{% endif %}</a></h1>
                 <h3>
                     {{ state.branch }} - <a href="#">{{ state.commit }}</a>
                     {% if is_logged_in %}

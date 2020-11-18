@@ -114,8 +114,9 @@ print_yellow = functools.partial(print_color, 3)
 def print_command(command: str, print_prefix: str = "", censor: List[str] = []) -> None:
     for item in censor:
         command = command.replace(item, SENSORED)
-    stripped_command = [line.strip() for line in command.splitlines() if line]
-    print_yellow(f"{print_prefix}+ " + f"\n{print_prefix}  ".join(stripped_command))
+    for i, line in enumerate(command.strip().splitlines()):
+        indent = "+ " if i == 0 else "  "
+        print_yellow(f"{print_prefix}{indent}{line.strip()}")
 
 
 def print_output(line: str, print_prefix: str) -> None:

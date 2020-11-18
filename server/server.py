@@ -133,7 +133,7 @@ def json_file_to_queue(path: Path, q: "queue.Queue[str]", kill_signal: threading
             if new_mtime != mtime:
                 text = path.read_text()
                 data = json.loads(text)
-                q.put(data["tasks"])
+                q.put(data)
                 mtime = new_mtime
         except Exception:
             pass
@@ -172,14 +172,14 @@ def sse_generator(from_line: int, base_path: Path) -> Iterator[str]:
             line_number = from_line
             while True:
                 try:
-                    line = q.get(timeout=10)
+                    item = q.get(timeout=10)
                 except queue.Empty:
                     # ping to check if client is still connected
                     yield ":ping\n\n"
                     continue
-                if isinstance(line, list):
+                if isinstance(item, dict):
                     data = "event: state\n"
-                    data += "data: {}\n".format(json.dumps(line))
+                    data += "data: {}\n".format(json.dumps(item))
                     data += "\n"
                     yield data
                 else:
@@ -187,8 +187,8 @@ def sse_generator(from_line: int, base_path: Path) -> Iterator[str]:
                     data += "event: line\n"
                     data += "data: {}\n".format(
                         json.dumps([
-                            get_stage(line),
-                            ansi2html.escaped(line)
+                            get_stage(item),
+                            ansi2html.escaped(item)
                         ])
                     )
                     data += "\n"
@@ -214,7 +214,7 @@ def stream(identifier: str) -> Tuple[Response, int]:
 
 def get_duration(snapshot: TaskSnapshot) -> str:
     if snapshot.finished and snapshot.started:
-        return str(datetime.timedelta(seconds=(int(snapshot.finished) - int(snapshot.started))))
+        return str(datetime.timedelta(seconds=(int(snapshot.finished - snapshot.started))))
     return ""
 
 

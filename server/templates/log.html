@@ -103,7 +103,7 @@
         </tr>
         {% for task in state.tasks %}
         <tr>
-            <td>
+            <td id="taskduration_{{ task.name }}">
                 {{ get_duration(task) }}
             </td>
             <td id="taskstatus_{{ task.name }}" class="{{ task.status }}">
@@ -129,6 +129,8 @@
 
     <script>
         window.onload = function() {
+            var stateSnapshot = {};
+
             var source = new EventSource("{{ stream }}");
             source.addEventListener(
                 'line',
@@ -163,12 +165,13 @@
             source.addEventListener(
                 'state',
                 function (e){
-                    data = JSON.parse(e.data);
-                    for (var task of data){
+                    stateSnapshot = JSON.parse(e.data);
+                    for (var task of stateSnapshot.tasks){
                         var el = document.getElementById("taskstatus_" + task.name);
                         el.className = task.status;
                         el.innerHTML = task.status;
                     };
+                    printTime();  // Call immediately
                 }
             );
 
@@ -184,6 +187,42 @@
                 status.style.backgroundColor = "red";
             }
 
+            // Task durations
+            function timeString(total_seconds) {
+              if (total_seconds < 0) {
+                total_seconds = 0;
+              }
+              var hours = Math.floor(total_seconds / 60 / 60);
+              var minutes = Math.floor(total_seconds / 60) % 60;
+              var seconds = Math.floor(total_seconds) % 60;
+              var time_string = (hours.toString().padStart(1, "0") + ":" + minutes.toString().padStart(2, "0") + ":" + seconds.toString().padStart(2, "0"));
+              return time_string
+            }
+
+            function printTime() {
+              if (stateSnapshot.tasks) {
+                var now = Math.floor(Date.now() / 1000);
+                for (var task of stateSnapshot.tasks){
+                  var el = document.getElementById("taskduration_" + task.name);
+                  if (task.started) {
+                    if (task.finished) {
+                      el.innerHTML = timeString(task.finished - task.started);
+                    } else {
+                      el.innerHTML = timeString(now - task.started);
+                    };
+                  }
+                };
+              }
+            }
+
+            function callFunctionOncePerSecond(callBackFunction) {
+                setTimeout(function() {
+                  callBackFunction()
+                  callFunctionOncePerSecond(callBackFunction)
+                }, 1000 - (Date.now() % 1000));  // Subtract drift
+            }
+
+            callFunctionOncePerSecond(printTime);
         }
     </script>
 </body>

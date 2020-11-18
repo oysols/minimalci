@@ -55,7 +55,7 @@ def get_image_from_container_id(container_id: str) -> Tuple[str, str]:
     assert len(data) == 1
     _, image_id = data[0]["Image"].split(":")
     image_name = data[0]["Config"]["Image"]
-    return str(image_name), str(image_name)
+    return str(image_name), str(image_id)
 
 
 def get_external_mount_point(container_id: str, internal_path: str) -> Path:

@@ -13,6 +13,7 @@ import secrets
 from pathlib import Path
 import functools
 import time
+from signal import SIGKILL, SIGTERM
 
 
 SENSORED = "********"
@@ -213,13 +214,17 @@ def run_command(
     signal = kill_signal or global_kill_signal
     if signal.is_set():
         raise ProcessError(f"Process start cancelled")
-    with subprocess.Popen(command, stdout=PIPE, stderr=PIPE, stdin=DEVNULL, **kwargs) as process:
+    # Create a process in a separate process group
+    with subprocess.Popen(command, stdout=PIPE, stderr=PIPE, stdin=DEVNULL, preexec_fn=os.setsid, **kwargs) as process:
         # Set thread name to match parent thread for taskrunner output aggregation
         thread_name_prefix = threading.current_thread().name + "-"
         # Start process reaper thread
+        # Kill process group
+        term_handler = functools.partial(os.killpg, process.pid, SIGTERM)
+        kill_handler = functools.partial(os.killpg, process.pid, SIGKILL)
         threading.Thread(
             target=kill_thread,
-            args=(process, process.terminate, process.kill, signal, timeout, print_prefix),
+            args=(process, term_handler, kill_handler, signal, timeout, print_prefix),
             daemon=True,
             name=thread_name_prefix + secrets.token_hex(4)
         ).start()
@@ -297,14 +302,16 @@ def run_docker_exec_command(
 
             # Start process reaper thread
             # Kill process from inside docker container
+            # Kill process group to include potential subprocesses
+            pgid = -pid  # PGID refers to the process group
             term_handler = functools.partial(
                 run_command,
-                ["docker", "exec", container_name, "kill", "-SIGTERM", str(pid)],
+                ["docker", "exec", container_name, "kill", "-SIGTERM", "--", str(pgid)],
                 kill_signal=threading.Event(),
             )
             kill_handler = functools.partial(
                 run_command,
-                ["docker", "exec", container_name, "kill", "-SIGKILL", str(pid)],
+                ["docker", "exec", container_name, "kill", "-SIGKILL", "--", str(pgid)],
                 kill_signal=threading.Event(),
             )
             threading.Thread(

@@ -13,6 +13,7 @@ import functools
 import subprocess
 import logging
 import shutil
+import gzip
 
 from flask import Flask, request, escape, Response, render_template, session
 import flask
@@ -122,6 +123,14 @@ def verify_identifier(identifier: str) -> None:
     for c in sha:
         if c not in legal_chars:
             raise ClientError("Invalid sha")
+
+
+def gzip_response_if_supported(response: Response) -> Response:
+    if 'gzip' not in request.headers.get('Accept-Encoding', ''):
+        return response.data
+    response.data = gzip.compress(response.data)
+    response.headers.update({"Content-Encoding": "gzip", "Content-Length": len(response.data)})
+    return response
 
 
 # Stream handling
@@ -257,17 +266,21 @@ def logs(identifier: str) -> Tuple[str, int]:
         ]
     line_number = len(lines) + 1  # +1 to match tail -f format
     state = StateSnapshot.load(statefile)
-    return render_template(
-        "log.html",
-        title=config.REPO_NAME,
-        state=state,
-        stream=f"/stream/{identifier}?id={line_number}",
-        lines=lines,  # lines are not autoescaped, must be manually escaped
-        get_duration=get_duration,
-        is_logged_in=is_logged_in(),
-        depth_in_tree=depth_in_tree,
-        DEBUG=DEBUG,
-    ), 200
+    return gzip_response_if_supported(
+        Response(
+            render_template(
+                "log.html",
+                title=config.REPO_NAME,
+                state=state,
+                stream=f"/stream/{identifier}?id={line_number}",
+                lines=lines,  # lines are not autoescaped, must be manually escaped
+                get_duration=get_duration,
+                is_logged_in=is_logged_in(),
+                depth_in_tree=depth_in_tree,
+                DEBUG=DEBUG,
+            ), 200
+        )
+    )
 
 
 def get_state_snapshots(print_errors: bool = False) -> List[Tuple[Path, StateSnapshot]]:
@@ -309,14 +322,18 @@ def repo_index() -> Tuple[str, int]:
             "sha": snapshot.commit[:8],
             "tags": tags.get(snapshot.commit, []),
         })
-    return render_template(
-        "builds.html",
-        title=title,
-        image_name=config.SELF_IMAGE_NAME,
-        builds=builds,
-        is_logged_in=is_logged_in(),
-        DEBUG=DEBUG,
-    ), 200
+    return gzip_response_if_supported(
+        Response(
+            render_template(
+                "builds.html",
+                title=title,
+                image_name=config.SELF_IMAGE_NAME,
+                builds=builds,
+                is_logged_in=is_logged_in(),
+                DEBUG=DEBUG,
+            ), 200
+        )
+    )
 
 
 # Actions

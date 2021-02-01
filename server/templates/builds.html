@@ -51,7 +51,7 @@
     <table style="width:100%;max-width:1000px;">
         <tr>
             <td colspan=5>
-                <h1>{{ title }}{% if DEBUG %} - DEBUG{% endif %}</h1>
+                <h1><a href="/">{{ title }}{% if DEBUG %} - DEBUG{% endif %}</a></h1>
                 <a href="https://github.com/oysols/minimalci">minimalci</a> [{{ image_name }}]
                 {% if True %}
                 <h3>
@@ -101,6 +101,14 @@
             </td>
         </tr>
         {% endfor %}
+            <tr>
+                <td colspan=5>
+                    <hr>
+                    {% if is_limited_view %}
+                    <a href="/?show=all">Show all</a>
+                    {% endif %}
+                </td>
+            </tr>
     </table>
     </center>
 

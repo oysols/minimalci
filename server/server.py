@@ -6,7 +6,7 @@ import queue
 import json
 import concurrent.futures
 import datetime
-from typing import Tuple, Iterator, Dict, List, Any, Callable, Set
+from typing import Tuple, Iterator, Dict, List, Any, Callable, Set, Optional
 import string
 import secrets
 import functools
@@ -283,9 +283,12 @@ def logs(identifier: str) -> Tuple[str, int]:
     )
 
 
-def get_state_snapshots(print_errors: bool = False) -> List[Tuple[Path, StateSnapshot]]:
+def get_state_snapshots(limit: Optional[int] = None, print_errors: bool = False) -> List[Tuple[Path, StateSnapshot]]:
     snapshots = []
-    for directory in config.LOGS_PATH.iterdir():
+    directories = sorted(list(config.LOGS_PATH.iterdir()), reverse=True)
+    if limit:
+        directories = directories[:limit]
+    for directory in directories:
         statefile = directory / config.STATEFILE
         if statefile.is_file():
             try:
@@ -302,7 +305,11 @@ def get_state_snapshots(print_errors: bool = False) -> List[Tuple[Path, StateSna
 @app.route("/")
 @require_authorization(redirect=True)
 def repo_index() -> Tuple[str, int]:
-    snapshots = sorted(get_state_snapshots(), key=lambda x: x[1].started, reverse=True)
+    should_show_all = request.args.get("show") == "all"
+    limit = None if should_show_all else 40
+    snapshots = get_state_snapshots(limit=limit)
+    is_limited_view = limit == len(snapshots)
+
     title = config.REPO_NAME
     builds = []
     tags = get_all_tags()
@@ -331,6 +338,7 @@ def repo_index() -> Tuple[str, int]:
                 builds=builds,
                 is_logged_in=is_logged_in(),
                 DEBUG=DEBUG,
+                is_limited_view=is_limited_view,
             ), 200
         )
     )

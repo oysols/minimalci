@@ -216,6 +216,9 @@
               }
             }
 
+            // Using setInterval will drift
+            // window.setInterval(printTime, 1000);
+
             function callFunctionOncePerSecond(callBackFunction) {
                 setTimeout(function() {
                   callBackFunction()

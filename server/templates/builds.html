@@ -101,15 +101,21 @@
             </td>
         </tr>
         {% endfor %}
-            <tr>
-                <td colspan=5>
-                    <hr>
-                    {% if is_limited_view %}
-                    <a href="/?show=all">Show all</a>
-                    {% endif %}
-                </td>
-            </tr>
+
+        {% if is_limited_view %}
+        <tr>
+            <td colspan=5>
+                ...
+            </td>
+        </tr>
+        <tr>
+            <td colspan=5>
+                <a href="/?show=all">Show all</a>
+            </td>
+        </tr>
+        {% endif %}
     </table>
+    <br>
     </center>
 
 </body>

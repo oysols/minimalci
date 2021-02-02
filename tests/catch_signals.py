@@ -2,6 +2,7 @@ import signal
 import time
 from typing import Any
 import sys
+import pathlib
 
 
 def handle_signal(*args: Any, **kwargs: Any) -> None:
@@ -14,6 +15,7 @@ if __name__ == "__main__":
     for sig in catchable_sigs:
         signal.signal(sig, handle_signal)
 
+    pathlib.Path("is_sleeping").touch()
     try:
         while True:
             print("sleeping")

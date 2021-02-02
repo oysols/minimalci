@@ -43,18 +43,27 @@ def test_docker_exec_signal_handling() -> None:
         with Local() as local_exe:
             catch_signal_stash = local_exe.stash("tests/catch_signals.py")
 
-        with LocalContainer("python") as exe:
-            f = e.submit(run_catch, exe, catch_signal_stash)
-            time.sleep(4)
-            global_kill_signal.set()
-            print("global_kill_signal set")
-            try:
-                f.result()
-            except ProcessError as e:
-                assert e.exit_code == 101
-            else:
-                raise Exception("Expected exception")
-        print("killed container")
+            with LocalContainer("python") as exe:
+                f = e.submit(run_catch, exe, catch_signal_stash)
+
+                # Wait until process is running and file exists
+                for _ in range(30):
+                    try:
+                        time.sleep(1)
+                        local_exe.sh(f"docker exec {exe.container_name} cat is_sleeping")
+                        break
+                    except:
+                        pass
+
+                global_kill_signal.set()
+                print("global_kill_signal set")
+                try:
+                    f.result()
+                except ProcessError as e:
+                    assert e.exit_code == 101
+                else:
+                    raise Exception("Expected exception")
+            print("killed container")
     global_kill_signal.clear()
 
 

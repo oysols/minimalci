@@ -4,11 +4,11 @@ build:
 	docker build . -t minimalci:${SHA}
 
 test:
-	python3 tests/test_executors.py
-	python3 tests/test_taskrunner.py
-	python3 tests/test_failed_import.py
-	python3 tests/test_statesnapshot.py
-	python3 tests/test_semaphore.py
+	python3 -u tests/test_executors.py
+	python3 -u tests/test_taskrunner.py
+	python3 -u tests/test_failed_import.py
+	python3 -u tests/test_statesnapshot.py
+	python3 -u tests/test_semaphore.py
 
 tasks:
 	python3 -m minimalci.taskrunner --commit $(SHA)

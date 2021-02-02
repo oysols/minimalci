@@ -49,7 +49,7 @@ def get_tasks_from_module(obj: object) -> List[Type[Task]]:
         if inspect.isclass(task) and issubclass(task, Task) and task != Task
     ]
     # Sort tasks according to line number
-    sorted_tasks = sorted(tasks, key=lambda task: task.run.__code__.co_firstlineno)
+    sorted_tasks = sorted(tasks, key=lambda task: task.run.__code__.co_firstlineno)  # type: ignore
     return sorted_tasks
 
 

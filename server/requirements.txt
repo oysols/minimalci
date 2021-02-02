@@ -4,4 +4,4 @@ flask
 docker-compose
 
 # For use in testing
-mypy
+mypy==0.800

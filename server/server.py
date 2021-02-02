@@ -127,9 +127,9 @@ def verify_identifier(identifier: str) -> None:
 
 def gzip_response_if_supported(response: Response) -> Response:
     if 'gzip' not in request.headers.get('Accept-Encoding', ''):
-        return response.data
+        return response
     response.data = gzip.compress(response.data)
-    response.headers.update({"Content-Encoding": "gzip", "Content-Length": len(response.data)})
+    response.headers.update({"Content-Encoding": "gzip", "Content-Length": len(response.data)})  # type: ignore
     return response
 
 
@@ -251,13 +251,13 @@ def depth_in_tree(state: StateSnapshot, task_name: str) -> int:
 @app.route("/logs/<identifier>/")
 @app.route("/logs/<identifier>")
 @require_authorization(redirect=True)
-def logs(identifier: str) -> Tuple[str, int]:
+def logs(identifier: str) -> Response:
     verify_identifier(identifier)
     base_path = config.LOGS_PATH / identifier
     logfile = base_path / config.LOGFILE
     statefile = base_path / config.STATEFILE
     if not statefile.is_file():
-        return "Page not found", 404
+        return Response("Page not found", 404)
     lines = []
     if logfile.is_file():
         lines = [
@@ -304,7 +304,7 @@ def get_state_snapshots(limit: Optional[int] = None, print_errors: bool = False)
 
 @app.route("/")
 @require_authorization(redirect=True)
-def repo_index() -> Tuple[str, int]:
+def repo_index() -> Response:
     should_show_all = request.args.get("show") == "all"
     limit = None if should_show_all else 40
     snapshots = get_state_snapshots(limit=limit)

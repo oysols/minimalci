@@ -9,7 +9,7 @@ import enum
 from dataclasses import dataclass
 
 from minimalci.executors import ProcessError, global_kill_signal
-from minimalci import semaphore
+from minimalci import semaphore, util
 
 
 class Status(enum.Enum):
@@ -65,53 +65,11 @@ class StateSnapshot:
     tasks: List[TaskSnapshot]
 
     def save(self, filepath: Path) -> None:
-        data = json.dumps(dataclasses.asdict(self), indent=4)
-        filepath.write_text(data)
+        util.save_dataclass(StateSnapshot, filepath, self)
 
     @classmethod
     def load(cls, filepath: Path) -> "StateSnapshot":
-        data = json.loads(filepath.read_text())
-        return dict_to_dataclass(StateSnapshot, data)
-
-
-T = TypeVar("T")
-
-
-def dict_to_dataclass(data_type: Callable[..., T], data: Any) -> T:
-    # Dataclasses (expects a dict)
-    if hasattr(data_type, "__dataclass_fields__"):
-        fieldtypes = {field.name: field.type for field in dataclasses.fields(data_type)}
-        return data_type(**{key: dict_to_dataclass(fieldtypes[key], value) for key, value in data.items()})
-
-    # Generic types
-    elif hasattr(data_type, "__origin__"):
-        # Optional[type]
-        if data_type.__origin__ == Union:  # type: ignore
-            try:
-                optional_type, nonetype = data_type.__args__  # type: ignore
-                assert type(None) == nonetype
-            except Exception:
-                raise Exception("Unsupported Union type. Only Optional supported.")
-            return None if data is None else dict_to_dataclass(optional_type, data)  # type: ignore
-        # List[type]
-        elif data_type.__origin__ == list:  # type: ignore
-            item_type, = data_type.__args__  # type: ignore
-            return [dict_to_dataclass(item_type, item) for item in data]  # type: ignore
-        # Dict[type, type]
-        elif data_type.__origin__ == dict:  # type: ignore
-            key_type, value_type = data_type.__args__  # type: ignore
-            return {dict_to_dataclass(key_type, key): dict_to_dataclass(value_type, value) for key, value in data.items()}  # type: ignore
-        else:
-            raise Exception("Unsupported generic type")
-
-    # Simple types
-    simple_types = [int, float, str, bool]
-    if data_type in simple_types:  # type: ignore
-        if not isinstance(data, data_type):  # type: ignore
-            raise TypeError(f"Expected {data_type}, got '{type(data)}'")
-        return data  # type: ignore
-
-    raise TypeError(f"Unsupported type '{data_type}'")
+        return util.load_dataclass(StateSnapshot, filepath)
 
 
 class State():

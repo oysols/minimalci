@@ -55,14 +55,33 @@
                 <a href="https://github.com/oysols/minimalci">minimalci</a> [{{ image_name }}]
                 {% if True %}
                 <h3>
-                    <form action="/trigger" method="POST"><button type="submit">Scan</button></form>
+                    {% if not is_inhibited %}
+                        <form action="/trigger" method="POST"><button type="submit">Scan</button></form>
+                    {% endif %}
                     {% if is_logged_in %}
-                    <form action="/logout" method="GET"><button type="submit">Logout</button></form>
+                        {% if not is_inhibited %}
+                            <form action="/inhibit" method="POST"><button type="submit">Inhibit</button></form>
+                        {% else %}
+                            <form action="/remove_inhibition" method="POST"><button type="submit">Remove inhibition</button></form>
+                        {% endif %}
+                        <form action="/logout" method="GET"><button type="submit">Logout</button></form>
                     {% endif %}
                 </h3>
                 {% endif %}
             </td>
         </tr>
+        {% if is_inhibited %}
+        <tr>
+            <td colspan=5 bgcolor=red>
+                Repository scan inhibited. No new builds will be started.
+            </td>
+        </tr>
+        <tr>
+            <td colspan=5>
+                <br>
+            </td>
+        </tr>
+        {% endif %}
         <tr>
             <td>
                 Timestamp

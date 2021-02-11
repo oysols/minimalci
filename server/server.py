@@ -36,6 +36,7 @@ app.config.update(
 )
 
 SCAN_TRIGGER = threading.Event()
+IS_INHIBITED = False
 
 
 # Handle authentication / authorization
@@ -337,6 +338,7 @@ def repo_index() -> Response:
                 image_name=config.SELF_IMAGE_NAME,
                 builds=builds,
                 is_logged_in=is_logged_in(),
+                is_inhibited=IS_INHIBITED,
                 DEBUG=DEBUG,
                 is_limited_view=is_limited_view,
             ), 200
@@ -387,6 +389,22 @@ def rerun(identifier: str) -> Tuple["str", int]:
             new_identifier = start_taskrunner_in_docker(state.commit, state.branch)
             return f'Rerunning at {get_external_link_string(new_identifier)}', 201
     return "Identifer not found", 404
+
+
+@app.route("/inhibit", methods=["POST"])
+@require_authorization(require_logged_in=True)
+def inhibit() -> Tuple["str", int]:
+    global IS_INHIBITED
+    IS_INHIBITED = True
+    return "Inhibited", 303, {"Location": "/"}
+
+
+@app.route("/remove_inhibition", methods=["POST"])
+@require_authorization(require_logged_in=True)
+def remove_inhibit() -> Tuple["str", int]:
+    global IS_INHIBITED
+    IS_INHIBITED = False
+    return "Removed inhibition", 303, {"Location": "/"}
 
 
 # Background thread logic
@@ -542,6 +560,9 @@ def background_thread() -> None:
     while True:
         SCAN_TRIGGER.wait()
         SCAN_TRIGGER.clear()
+        if IS_INHIBITED:
+            print("INFO: Remote scan inhibited")
+            break
         try:
             git_fetch()
             build_all_branches()

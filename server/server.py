@@ -286,9 +286,9 @@ def logs(identifier: str) -> Response:
 def get_state_snapshots(limit: Optional[int] = None, print_errors: bool = False) -> List[Tuple[Path, StateSnapshot]]:
     snapshots = []
     directories = sorted(list(config.LOGS_PATH.iterdir()), reverse=True)
-    if limit:
-        directories = directories[:limit]
     for directory in directories:
+        if limit and len(snapshots) >= limit:
+            break
         statefile = directory / config.STATEFILE
         if statefile.is_file():
             try:

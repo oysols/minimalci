@@ -43,18 +43,18 @@ IS_INHIBITED = False
 
 
 @app.route("/login")
-def login():  # type: ignore
+def login() -> Response:
     if not config.OAUTH_ENABLED:
-        return "Disabled", 404
+        return Response("Disabled", 404)
     url, session_state = oauth.begin_oauth(config.OAUTH_SERVER)
     session["oauth_state"] = session_state
-    return flask.redirect(url, code=302)
+    return Response("Redirecting...", 302, {"Location": url})
 
 
 @app.route("/callback")
-def login_callback():  # type: ignore
+def login_callback() -> Response:
     if not config.OAUTH_ENABLED:
-        return "Disabled", 404
+        return Response("Disabled", 404)
     access_token = oauth.finish_oauth(
         config.OAUTH_SERVER,
         str(request.args.get("code")),
@@ -64,16 +64,16 @@ def login_callback():  # type: ignore
     username = oauth.get_username(config.OAUTH_SERVER, access_token)
     if username in config.AUTHORIZED_USERS:
         session["username"] = username
-        return flask.redirect(session.pop("redirected_from", "/"), code=302)
-    return "User not authorized", 403
+        return Response("Redirecting...", 302, {"Location": session.pop("redirected_from", "/")})
+    return Response("User not authorized", 403)
 
 
 @app.route("/logout")
-def logout():  # type: ignore
+def logout() -> Response:
     session.clear()
     if not config.OAUTH_ENABLED:
-        return "Disabled", 404
-    return "Logged out", 200
+        return Response("Disabled", 404)
+    return Response("Logged out", 303, {"Location": "/"})
 
 
 def is_logged_in() -> bool:
@@ -216,11 +216,11 @@ def sse_generator(from_line: int, base_path: Path) -> Iterator[str]:
 
 @app.route("/stream/<identifier>")
 @require_authorization()
-def stream(identifier: str) -> Tuple[Response, int]:
+def stream(identifier: str) -> Response:
     verify_identifier(identifier)
     base_path = config.LOGS_PATH / identifier
     from_line = int(request.headers.get("last-event-id", request.args.get("id", 1)))
-    return Response(sse_generator(from_line, base_path), mimetype="text/event-stream"), 200
+    return Response(sse_generator(from_line, base_path), 200, mimetype="text/event-stream")
 
 
 # Fancy visulas
@@ -349,20 +349,23 @@ def repo_index() -> Response:
 # Actions
 
 
-def get_external_link_string(identifier: str) -> str:
-    external_url = f"/logs/{identifier}"
-    return f'<a href="{external_url}">{external_url}</a>'
+def get_external_url(identifier: str) -> str:
+    return f"/logs/{identifier}"
 
 
 @app.route("/trigger", methods=["GET", "POST"])
-def trigger() -> Tuple["str", int]:
+def trigger() -> Response:
+    if IS_INHIBITED:
+        return Response("Inhibited", 400)
     SCAN_TRIGGER.set()
-    return "Looking for changes in remote repo", 200
+    if request.method == "POST":
+        return Response("Looking for changes in remote repo", 303, {"Location": "/"})
+    return Response("Looking for changes in remote repo", 200)
 
 
 @app.route("/kill/<identifier>", methods=["POST"])
 @require_authorization(require_logged_in=True)
-def kill(identifier: str) -> Tuple["str", int]:
+def kill(identifier: str) -> Response:
     for state_path, state in get_state_snapshots():
         if state.identifier == identifier:
             try:
@@ -374,37 +377,39 @@ def kill(identifier: str) -> Tuple["str", int]:
                     updated_state.finished = time.time()
                     updated_state.status = Status.failed.name
                     updated_state.save(state_path)
-                    return "Container not running. Overall status manually set to FAILED.", 200
+                    return Response("Container not running. Overall status manually set to FAILED.", 200)
                 else:
-                    return "Container not running", 400
-            return f"Sent SIGTERM to container {get_external_link_string(identifier)}", 200
-    return "Identifier not found", 404
+                    return Response("Container not running", 400)
+            return Response(f"Sent SIGTERM to container", 303, {"Location": f"/logs/{identifier}"})
+    return Response("Identifier not found", 404)
 
 
 @app.route("/rerun/<identifier>", methods=["POST"])
 @require_authorization(require_logged_in=True)
-def rerun(identifier: str) -> Tuple["str", int]:
+def rerun(identifier: str) -> Response:
+    if IS_INHIBITED:
+        return Response("Inhibited", 400)
     for state_path, state in get_state_snapshots():
         if state.identifier == identifier:
             new_identifier = start_taskrunner_in_docker(state.commit, state.branch)
-            return f'Rerunning at {get_external_link_string(new_identifier)}', 201
-    return "Identifer not found", 404
+            return Response("Rerunning", 303, {"Location": f"/logs/{new_identifier}"})
+    return Response("Identifer not found", 404)
 
 
 @app.route("/inhibit", methods=["POST"])
 @require_authorization(require_logged_in=True)
-def inhibit() -> Tuple["str", int]:
+def inhibit() -> Response:
     global IS_INHIBITED
     IS_INHIBITED = True
-    return "Inhibited", 303, {"Location": "/"}
+    return Response("Inhibited", 303, {"Location": "/"})
 
 
 @app.route("/remove_inhibition", methods=["POST"])
 @require_authorization(require_logged_in=True)
-def remove_inhibit() -> Tuple["str", int]:
+def remove_inhibit() -> Response:
     global IS_INHIBITED
     IS_INHIBITED = False
-    return "Removed inhibition", 303, {"Location": "/"}
+    return Response("Removed inhibition", 303, {"Location": "/"})
 
 
 # Background thread logic
@@ -459,6 +464,8 @@ def safe_name(name: str) -> str:
 
 
 def start_taskrunner_in_docker(commit: str, branch: str) -> str:
+    if IS_INHIBITED:
+        raise Exception("Tried to start taskrunner while inhibited")
     identifier = f"{int(time.time())}_{commit}"
     logdir = config.LOGS_PATH / identifier
     # Loop to guarantee unique identifier
@@ -515,11 +522,6 @@ def start_taskrunner_in_docker(commit: str, branch: str) -> str:
     return identifier
 
 
-def build_all_branches() -> None:
-    for branch, commit in get_new_branches():
-        start_taskrunner_in_docker(commit, branch)
-
-
 def workspace_cleanup() -> None:
     KEEP_WORKSPACES_SECONDS = 10
     snapshots = get_state_snapshots()
@@ -555,17 +557,19 @@ def init() -> None:
     # Get state snapshots to print error messages on init
     get_state_snapshots(print_errors=True)
 
+    # server_state_path = config.DATA_PATH / "server_state.json"
+    # server_state = load_dataclass(ServerState, server_state_path)
+    # save_dataclass(ServerState, server_state_path, server_state)
+
 
 def background_thread() -> None:
     while True:
         SCAN_TRIGGER.wait()
         SCAN_TRIGGER.clear()
-        if IS_INHIBITED:
-            print("INFO: Remote scan inhibited")
-            break
         try:
             git_fetch()
-            build_all_branches()
+            for branch, commit in get_new_branches():
+                start_taskrunner_in_docker(commit, branch)
             workspace_cleanup()
         except Exception as e:
             print(f"ERROR: Background Thread Failed\n{e}")

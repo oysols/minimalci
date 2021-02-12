@@ -118,5 +118,6 @@ if __name__ == "__main__":
 
     # Kill executor processes and cleanly exit on SIGTERM
     signal.signal(signal.SIGTERM, global_kill_signal_handler)
+    signal.signal(signal.SIGINT, global_kill_signal_handler)
 
     run_all_tasks_in_file(args.file, state)

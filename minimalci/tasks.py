@@ -23,6 +23,8 @@ class Status(enum.Enum):
 
 
 def get_overall_status(status_list: List[Status]) -> Status:
+    if not status_list:
+        return Status.not_started
     if all(status == Status.skipped for status in status_list):
         return Status.skipped
     if all(status in [Status.success, Status.skipped] for status in status_list):

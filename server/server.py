@@ -19,7 +19,7 @@ from flask import Flask, request, escape, Response, render_template, session
 import flask
 
 from minimalci.executors import run_command, ProcessError
-from minimalci.tasks import StateSnapshot, TaskSnapshot, Status
+from minimalci.tasks import StateSnapshot, TaskSnapshot, Status, State
 
 import ansi2html
 import config
@@ -490,6 +490,13 @@ def start_taskrunner_in_docker(commit: str, branch: str) -> str:
 
     external_logdir = config.EXTERNAL_DATA_MOUNT_POINT / logdir.relative_to(config.DATA_PATH)
     external_workdir = config.EXTERNAL_DATA_MOUNT_POINT / workdir.relative_to(config.DATA_PATH)
+
+    # Create empty state to indicate build has been initiated
+    state = State()
+    state.branch = branch
+    state.commit = commit
+    state.identifier = identifier
+    state.snapshot().save(logdir / config.STATEFILE)
 
     command = [
         "docker",

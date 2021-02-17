@@ -23,7 +23,7 @@ def test_empty_file_import() -> None:
         filepath = Path(f.name + ".py")
         filepath.write_text("")
         taskrunner.run_all_tasks_in_file(filepath, state)
-    assert state.status() == tasks.Status.skipped
+    assert state.tasks[0].name == "FailedImport"
 
 def test_no_file_import() -> None:
     state = tasks.State()

@@ -83,6 +83,8 @@ def run_all_tasks_in_file(filename: Path, state: State) -> None:
         tasks_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(tasks_module)  # type: ignore
         tasks = get_tasks_from_module(tasks_module)
+        if not tasks:
+            raise Exception("No tasks found")
     except (Exception, SyntaxError):
         tb = traceback.format_exc()
 

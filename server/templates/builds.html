@@ -60,7 +60,7 @@
                     {% endif %}
                     {% if is_logged_in %}
                         {% if not is_inhibited %}
-                            <form action="/inhibit" method="POST"><button type="submit">Inhibit</button></form>
+                            <form action="/inhibit" method="POST"><button type="submit">Inhibit Scan</button></form>
                         {% else %}
                             <form action="/remove_inhibition" method="POST"><button type="submit">Remove inhibition</button></form>
                         {% endif %}

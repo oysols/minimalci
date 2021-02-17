@@ -259,6 +259,15 @@ def logs(identifier: str) -> Response:
     statefile = base_path / config.STATEFILE
     if not statefile.is_file():
         return Response("Page not found", 404)
+
+    # Wait for tasks to be enumerated/started
+    # This is needed due to server side generated html of all tasks
+    start = time.time()
+    while not StateSnapshot.load(statefile).tasks:
+        time.sleep(0.5)
+        if time.time() - start > 10:
+            return Response("Timeout: Waiting for tasks start", 500)
+
     lines = []
     if logfile.is_file():
         lines = [

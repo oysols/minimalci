@@ -9,6 +9,7 @@ test:
 	python3 -u tests/test_failed_import.py
 	python3 -u tests/test_statesnapshot.py
 	python3 -u tests/test_semaphore.py
+	python3 -u tests/test_util.py
 
 tasks:
 	python3 -m minimalci.taskrunner --commit $(SHA)

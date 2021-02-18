@@ -1,9 +1,11 @@
 from pathlib import Path
-from minimalci import tasks
 import tempfile
 
+from minimalci import util, tasks
+
+
 def test_state_snapshot() -> None:
-    a = tasks.dict_to_dataclass(
+    a = util.validate_and_cast_to_type(
         tasks.StateSnapshot,
         {
             "commit": "1234",

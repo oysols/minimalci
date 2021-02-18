@@ -294,7 +294,7 @@ def logs(identifier: str) -> Response:
 
 
 def get_state_snapshots(limit: Optional[int] = None, print_errors: bool = False) -> List[Tuple[Path, StateSnapshot]]:
-    snapshots = []
+    snapshots: List[Tuple[Path, StateSnapshot]] = []
     directories = sorted(list(config.LOGS_PATH.iterdir()), reverse=True)
     for directory in directories:
         if limit and len(snapshots) >= limit:

@@ -11,9 +11,8 @@ import builtins
 import sys
 import traceback
 import argparse
-import signal
 
-from .executors import global_kill_signal_handler
+from .executors import set_sigterm_sigint_global_kill_signal_handler
 from .tasks import Task, State
 
 
@@ -118,8 +117,7 @@ if __name__ == "__main__":
     state.logdir = Path(args.logdir)
     state.identifier = args.identifier
 
-    # Kill executor processes and cleanly exit on SIGTERM
-    signal.signal(signal.SIGTERM, global_kill_signal_handler)
-    signal.signal(signal.SIGINT, global_kill_signal_handler)
+    # Kill executor processes and cleanly exit on SIGTERM/SIGINT
+    set_sigterm_sigint_global_kill_signal_handler()
 
     run_all_tasks_in_file(args.file, state)

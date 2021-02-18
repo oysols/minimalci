@@ -2,9 +2,10 @@ import concurrent.futures
 import subprocess
 import time
 import sys
+import signal
 
 sys.path.append(".")
-from minimalci.executors import Local, LocalContainer, global_kill_signal, ProcessError, Stash
+from minimalci.executors import Local, LocalContainer, global_kill_signal, ProcessError, Stash, set_sigterm_sigint_global_kill_signal_handler
 
 
 def test_stash() -> None:
@@ -68,6 +69,7 @@ def test_docker_exec_signal_handling() -> None:
 
 
 if __name__ == "__main__":
+    set_sigterm_sigint_global_kill_signal_handler()
     test_docker_exec_signal_handling()
     test_stash()
     test_temp_path()

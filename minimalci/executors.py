@@ -14,6 +14,7 @@ from pathlib import Path
 import functools
 import time
 from signal import SIGKILL, SIGTERM
+import signal
 
 
 SENSORED = "********"
@@ -24,6 +25,11 @@ global_kill_signal = threading.Event()
 
 def global_kill_signal_handler(signum: int, frame: FrameType) -> None:
     global_kill_signal.set()
+
+
+def set_sigterm_sigint_global_kill_signal_handler() -> None:
+    signal.signal(signal.SIGTERM, global_kill_signal_handler)
+    signal.signal(signal.SIGINT, global_kill_signal_handler)
 
 
 class ProcessError(Exception):

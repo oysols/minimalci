@@ -42,12 +42,9 @@ ISOLATE_PYTHON = os.environ.get("ISOLATE_PYTHON")  # Only relevant for running m
 
 # Introspection when running in docker
 def get_self_container_id() -> Optional[str]:
-    cpuset = Path("/proc/1/cpuset").read_text().strip()
-    if cpuset.startswith("/docker/"):
-        _, _, container_id = cpuset.split("/")
-        return container_id
-    else:
-        return None
+    if Path("/.dockerenv").is_file():
+        return os.environ["HOSTNAME"]
+    return None
 
 
 def get_image_from_container_id(container_id: str) -> Tuple[str, str]:
@@ -69,7 +66,7 @@ def get_external_mount_point(container_id: str, internal_path: str) -> Path:
 
 
 SELF_CONTAINER_ID = get_self_container_id()
-SELF_IMAGE_NAME, SELF_IMAGE_ID = get_image_from_container_id(SELF_CONTAINER_ID) if SELF_CONTAINER_ID else ("", "")
-TASKRUNNER_IMAGE = SELF_IMAGE_ID or "minimalci:latest"
+SELF_IMAGE_NAME, SELF_IMAGE_ID = get_image_from_container_id(SELF_CONTAINER_ID) if SELF_CONTAINER_ID else ("CONTAINER_NAME_NOT_DETECTED", "")
+TASKRUNNER_IMAGE = SELF_IMAGE_ID or "minimalci"
 EXTERNAL_DATA_MOUNT_POINT = get_external_mount_point(SELF_CONTAINER_ID, str(DATA_PATH.absolute())) if SELF_CONTAINER_ID else DATA_PATH.absolute()
 EXTERNAL_SSH_MOUNT_POINT = get_external_mount_point(SELF_CONTAINER_ID, str(Path("~/.ssh").expanduser())) if SELF_CONTAINER_ID else Path("~/.ssh").expanduser()

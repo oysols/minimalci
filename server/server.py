@@ -262,11 +262,8 @@ def logs(identifier: str) -> Response:
 
     # Wait for tasks to be enumerated/started
     # This is needed due to server side generated html of all tasks
-    start = time.time()
-    while not StateSnapshot.load(statefile).tasks:
+    while not StateSnapshot.load(statefile).tasks and time.time() - StateSnapshot.load(statefile).started < 10:
         time.sleep(0.5)
-        if time.time() - start > 10:
-            return Response("Timeout: Waiting for tasks start", 500)
 
     lines = []
     if logfile.is_file():

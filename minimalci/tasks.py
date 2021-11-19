@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import enum
 from dataclasses import dataclass
+import secrets
 
 from minimalci.executors import ProcessError, global_kill_signal
 from minimalci import semaphore, util
@@ -75,16 +76,22 @@ class StateSnapshot:
 
 
 class State():
-    def __init__(self) -> None:
-        self.tasks: List[Task] = []
-        self.logdir = Path()
-
+    def __init__(
+        self,
+        commit: str = "",
+        branch: str = "",
+        repo_name: str = "",
+        log_url: str = "",
+        identifier: str = "",
+        logdir: Optional[Path] = None,
+    ) -> None:
         self.commit = ""
         self.branch = ""
         self.repo_name = ""
         self.log_url = ""
-        self.identifier = ""
-
+        self.identifier = identifier if identifier else secrets.token_hex(16)
+        self.logdir = logdir if logdir else Path()
+        self.tasks: List[Task] = []
         self.started = time.time()
         self.finished: Optional[float] = None
 

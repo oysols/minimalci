@@ -109,13 +109,14 @@ if __name__ == "__main__":
     parser.add_argument('--file', help='Tasks file', default="tasks.py")
     args = parser.parse_args()
 
-    state = State()
-    state.commit = args.commit
-    state.branch = args.branch
-    state.repo_name = args.repo_name
-    state.log_url = args.log_url
-    state.logdir = Path(args.logdir)
-    state.identifier = args.identifier
+    state = State(
+        commit=args.commit,
+        branch=args.branch,
+        repo_name=args.repo_name,
+        log_url=args.log_url,
+        identifier=args.identifier,
+        logdir=Path(args.logdir),
+    )
 
     # Kill executor processes and cleanly exit on SIGTERM/SIGINT
     set_sigterm_sigint_global_kill_signal_handler()

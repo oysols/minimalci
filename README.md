@@ -23,12 +23,12 @@ with Local() as e:
 
 - Semaphore queue `semaphore.py` / `semaphore_subprocess.py`
 
-```
+```python
 with semaphore_queue("user@remote_host:path/to/semaphore.queue"):
     do_stuff_while_holding_semaphore()
 ```
 
-- Tasks / Taskrunner `tasks.py` / `taskrunner.py`
+- Tasks `tasks.py`
 
 ```python
 class Setup(Task):
@@ -41,6 +41,26 @@ class Test(Task):
     def run(self):
         with LocalContainer("some_image") as e:
             e.sh(f"echo Testing commit {self.state.commit}")
+```
+
+- Taskrunner `taskrunner.py`
+
+```python
+# Create a simple State object
+state = State()
+
+# or create a State object with additional context for the tasks
+state = State(
+    commit="1234ca3d41a23d4e4f923",
+    branch="some/branch",
+    repo_name="MyRepo",
+)
+
+# Run Tasks directly
+run_tasks([Task1, Task2], state)
+
+# or run Tasks from a separate file
+run_all_tasks_in_file("tasks.py", state)
 ```
 
 # Docs

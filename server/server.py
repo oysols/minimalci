@@ -489,10 +489,11 @@ def start_taskrunner_in_docker(commit: str, branch: str) -> str:
     external_workdir = config.EXTERNAL_DATA_MOUNT_POINT / workdir.relative_to(config.DATA_PATH)
 
     # Create empty state to indicate build has been initiated
-    state = State()
-    state.branch = branch
-    state.commit = commit
-    state.identifier = identifier
+    state = State(
+        branch=branch,
+        commit=commit,
+        identifier=identifier,
+    )
     state.snapshot().save(logdir / config.STATEFILE)
 
     command = [

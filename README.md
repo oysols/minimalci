@@ -67,7 +67,37 @@ run_all_tasks_in_file("tasks.py", state)
 
 TODO
 
-## Server setup
+## High level overview
+
+### The web server `server.py`
+
+When the server is triggered with a webhook or by manually clicking scan the server will fetch git data from the remote.
+If the current branch and commit combinations does not exist in the logs the server will start a new run for each new branch and commit combination.
+The server starts a run by:
+ - starting a new docker container
+ - copying in the `.git` folder to the working directory
+ - checking out the correct branch/commit
+ - running taskrunner.py
+
+### The taskrunner `taskrunner.py`
+
+The taskrunner
+ - collects all Tasks
+ - adds a reference to each Task in the State object
+ - mocks the `print` function to log all data to the logfile with a task name prefix
+ - starts all `Task._run()` at the same time, in separate threads, with the same working directory
+
+### Each task `tasks.py`
+
+The execution of the code in `Task.run()` is managed by `Task._run()`:
+ - waits for dependent tasks based on `self.run_after`
+ - sets status `Skipped` and skips execution if not all of the dependent tasks have status `Success`, unless `self.run_always`
+ - waits for optional semaphores defined in `self.aquire_semaphore`
+ - sets status `Running`
+ - executes the code in `Task.run()`
+ - sets status `Success` on completion, `Failed` if there were any exceptions or `Skipped` if the Skipped exception is raised
+
+# Server setup
 
 - Modify docker-compose.yml according to requirements
 - Optional: Add github oauth client id and secret
